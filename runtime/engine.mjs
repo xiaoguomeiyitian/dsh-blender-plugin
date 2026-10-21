@@ -335,6 +335,32 @@ function extractTag(out, tag) {
   return JSON.parse(m[1]);
 }
 
+/**
+ * 读回 addon 侧产出的 PNG（跨容器部署的关键一跳）。
+ *
+ * frame/frameArea/view 的默认路径面向"同机"拓扑（WSL/Windows）：addon 把图写进
+ * 共享工作目录，宿主直接 fs 读。跨容器部署时两侧文件系统不同，本地读必然
+ * ENOENT——这里退一步：用 execute_code 让 addon 把同一文件读出来，base64 经
+ * socket 回传。同机拓扑行为不变（本地读到就直接返回，不走 socket）。
+ */
+async function readAddonFile(addon, addonPath) {
+  try {
+    return fs.readFileSync(winToWsl(addonPath));
+  } catch (e) {
+    if (!e || e.code !== 'ENOENT') throw e;
+  }
+  const code = 'import base64, json\n'
+    + 'print("DSHPNG " + json.dumps(base64.b64encode(open(' + JSON.stringify(addonPath) + ', "rb").read()).decode()))\n';
+  let b64 = '';
+  try {
+    b64 = extractTag(await addon.send('execute_code', { code }, 120000), 'DSHPNG');
+  } catch (e) {
+    throw new Error('跨容器读回失败（addon 侧无此文件或回传为空）: ' + String(addonPath)
+      + ' | ' + String((e && e.message) || e).slice(0, 200));
+  }
+  return Buffer.from(String(b64), 'base64');
+}
+
 function extractLoop(out) {
   return extractTag(out, 'LOOP');
 }
@@ -2582,7 +2608,7 @@ export function createEngine(opts = {}) {
       const out = await addon.send('execute_code', { code: KERNEL_BOOTSTRAP + '\n' + code }, 60000);
       const txt = (out && typeof out.result === 'string') ? out.result : '';
       if (!txt.includes('AREA_SHOT')) throw new Error('区域截图失败: ' + txt.slice(0, 200));
-      const png = fs.readFileSync(LIVE_PNG_WSL);
+      const png = await readAddonFile(addon, LIVE_PNG_WIN);
       return { png: png, meta: { method: 'screenshot_area', info: txt.trim() } };
     },
     /** 渲染性能：status / apply / revert / analyze / help */
@@ -2593,7 +2619,7 @@ export function createEngine(opts = {}) {
     async frame(maxSize = 560) {
       const res = await addon.send('get_viewport_screenshot', { max_size: maxSize, filepath: LIVE_PNG_WIN, format: 'png' });
       if (res && res.error) throw new Error(res.error);
-      const png = fs.readFileSync(LIVE_PNG_WSL);
+      const png = await readAddonFile(addon, LIVE_PNG_WIN);
       return { png: png, meta: res };
     },
     /** 自定义视角捕获：from/look_at/lens/ortho/...（view.py）——不动物体、不动用户视口 */
@@ -2608,7 +2634,7 @@ export function createEngine(opts = {}) {
       const info = extractTag(await addon.send('execute_code', { code: KERNEL_BOOTSTRAP + '\n' + body }, Math.max(30000, Number(spec.timeoutMs) || 120000)), 'VIEW');
       if (!info || info.ok === false) throw new Error('view 失败: ' + JSON.stringify(info).slice(0, 300));
       metrics.lastView = { at: Date.now(), ms: info.ms, mode: info.mode, path: info.path };
-      return { png: fs.readFileSync(winToWsl(info.path)), meta: info };
+      return { png: await readAddonFile(addon, info.path), meta: info };
     },
     /**
      * 宿主集成（/host/view/capture，契约 §1.4）：抓**当前 GUI 视口**那一帧。

@@ -40,7 +40,7 @@ import { createSelectionStore } from './selectionstore.mjs';
 const argv = process.argv.slice(2);
 const portArg = argv.indexOf('--port');
 const PORT = Number(portArg >= 0 ? argv[portArg + 1] : (process.env.VIEWPORT_PORT || CFG.httpPort));
-const HOST = '127.0.0.1';
+const HOST = process.env.DSH_BLENDER_HTTP_HOST || '127.0.0.1';
 
 const engine = createEngine();
 // v2.3：Blender 原生选中事件（N 面板「发送选中到 DSH」→ 这里 → 客户端插入草稿）
