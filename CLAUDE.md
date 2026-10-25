@@ -14,6 +14,11 @@
    `blender_rt_headless` / `blender_rt_job`；无头也能 rt_see。
 4. **随包 skill 真源**是 `skills/blender-modeling/`（当前 v2.6，GUI 优先（无头备用））；改 skill 直接改这里，
    独立仓库 `dsh-skill-blender-modeling` 仅作非 DSH 宿主的镜像。
-5. **不覆盖 / 未安装依赖**：landmark/人脸（无 cv2/MediaPipe）、OCR、DXF、Open3D/manifold3d/glTF-Validator
+5. **fork delta ③（会话级实例模式）**：插件配置 `instanceMode: true` 时，每个会话自动分配专属
+   Blender 实例（容器 + 后端 + 工作目录 + 端口），会话间物理隔离、用完即删；
+   运维用 `blender_viewport(op="instance", action="status|claim|list|release|reap")`；
+   详见 [plugin-fork-deltas/session-routing.md](plugin-fork-deltas/session-routing.md)。
+   **工具数仍是 15、catalog 仍是 33/217。**
+6. **不覆盖 / 未安装依赖**：landmark/人脸（无 cv2/MediaPipe）、OCR、DXF、Open3D/manifold3d/glTF-Validator
    均未安装 —— 不要写成已支持。
-6. 工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（33/217，本地直出）；写错会回 `did_you_mean`，照骨架改。
+7. 工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（33/217，本地直出）；写错会回 `did_you_mean`，照骨架改。

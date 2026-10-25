@@ -28,8 +28,24 @@ export interface Config {
     autoStart: boolean;
     /** v2.6.1：dsh-TUI 宿主半边（选中 chip / 页脚字段 / @ 提及 / /blender 命令）；只在有对应接缝的宿主生效 */
     tui: boolean;
+    /**
+     * v2.6.1-fork(delta③)：**会话级一次性实例模式**。
+     * 开：每个会话（exec.agent.id）自动分配专属 Blender 实例（容器 + 后端 + 工作目录 + 端口），
+     *     会话之间物理隔离、用完即删；现役单例（9877/blender-dsh）降级为回退与滚动窗口。
+     * 关：完全保持 v2.6.1 行为（单例 9877）。
+     */
+    instanceMode?: boolean;
+    /** 实例管理器地址（默认 http://127.0.0.1:9880） */
+    instanceManagerUrl?: string;
 }
 export declare const Config: any;
+export interface RouteTarget {
+    port: number;
+    holder: string;
+    instanceId: string | null;
+    routed: boolean;
+    error?: string;
+}
 /** 纯决策：命中 ⇒ dup=true 且计数 +1；未命中 ⇒ 记下新 hash。force=true 一律当未命中处理并重置。 */
 export declare function frameDedupe(key: string, hash: string, force?: boolean): {
     dup: boolean;

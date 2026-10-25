@@ -20,7 +20,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { spawn, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -230,6 +230,15 @@ export interface Config {
   autoStart: boolean
   /** v2.6.1：dsh-TUI 宿主半边（选中 chip / 页脚字段 / @ 提及 / /blender 命令）；只在有对应接缝的宿主生效 */
   tui: boolean
+  /**
+   * v2.6.1-fork(delta③)：**会话级一次性实例模式**。
+   * 开：每个会话（exec.agent.id）自动分配专属 Blender 实例（容器 + 后端 + 工作目录 + 端口），
+   *     会话之间物理隔离、用完即删；现役单例（9877/blender-dsh）降级为回退与滚动窗口。
+   * 关：完全保持 v2.6.1 行为（单例 9877）。
+   */
+  instanceMode?: boolean
+  /** 实例管理器地址（默认 http://127.0.0.1:9880） */
+  instanceManagerUrl?: string
 }
 
 /**
@@ -316,6 +325,8 @@ export const Config = z
       port: z.natural().default(resolveHttpPort()),
       autoStart: z.boolean().default(true),
       tui: z.boolean().default(true),
+      instanceMode: z.boolean().default(false),
+      instanceManagerUrl: z.string().default('http://127.0.0.1:9880'),
     })
   : undefined
 
@@ -345,6 +356,11 @@ async function probe(port: number, timeoutMs = 1500): Promise<boolean> {
 }
 
 async function ensureBackend(port: number): Promise<boolean> {
+  // v2.6.1-fork(delta③)：实例模式下，"后端可用" = **本会话实例就绪**（惰性建容器 + 后端 + 等 doctor）
+  if (INSTANCE_MODE) {
+    const t = await routeTarget(true)
+    return t.routed
+  }
   if (await probe(port)) return true
   if (paused) return false
   try { await startBackend(port) } catch (e) { /* ignore */ }
@@ -373,6 +389,13 @@ function spawnChild(port: number): string {
  * 现在：端口能服务 ⇒ already-running；端口不通但句柄在 ⇒ 判为陈旧句柄，SIGTERM 后重拉。
  */
 async function startBackend(port: number): Promise<string> {
+  // v2.6.1-fork(delta③)：实例模式下由**管理器**拉容器与后端（插件不直接 spawn）
+  if (INSTANCE_MODE) {
+    const t = await routeTarget(true)
+    return t.routed
+      ? ('instance-ready ' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）')
+      : ('instance-failed: ' + String(t.error || 'unknown'))
+  }
   const url = base(port) + '/health'
   const portUp = await probeHttp(url, 800)
   const decision = decideStart({ portUp, childAlive: childAlive() })
@@ -468,13 +491,143 @@ async function withTimeout(path: string, init: any, timeoutMs: number): Promise<
 }
 
 async function backendJson(port: number, path: string, timeoutMs = 20000, init?: any): Promise<any> {
-  const r = await withTimeout(base(port) + path, init, timeoutMs)
+  // v2.6.1-fork(delta③)：实例模式下，出口即路由 —— 打到本会话的实例，而不是旧单例。
+  const t = await routeTarget(false)
+  const r = await withTimeout(base(t.port) + path, init, timeoutMs)
   const text = await r.text()
   try { return JSON.parse(text) } catch (e) { return { ok: false, raw: text.slice(0, 500) } }
 }
 
 /** 本会话在写通道上的身份（租约 holder）；跨会话共用同一个后端时用它区分 */
 const HOLDER = process.env.DSH_BLENDER_HOLDER || ('plugin-pid-' + String(process.pid))
+
+/* ─────────────────── v2.6.1-fork(delta③)：会话级一次性实例路由 ───────────────────
+ *
+ * **为什么**：v2.6.1 的 HOLDER 是**进程级**（plugin-pid-<pid>）⇒ 同一 DSH 进程内所有会话
+ * 共用一个写租约身份 ⇒ 会话 A 的写操作不会被会话 B 挡住 ⇒ 并发写**静默互相覆盖**；
+ * 再叠加场景/主线程/容器都是全局单点 ⇒ 多会话并行必然打架。
+ *
+ * **怎么改**：按会话分配实例。宿主 ToolExecution 的 `agent.id` 就是 SessionId，
+ * 用它去**实例管理器**要一个专属实例（容器 + 后端 + 工作目录 + 端口）；此后本次调用的
+ * 一切后端请求都打到那个实例，租约 holder 改成 `inst-<instanceId>`（真正的会话身份）。
+ *
+ * **零调用点改动**：所有工具都经 backendJson / backendPost / fetchFrame / fetchView 出去，
+ * 只要在这几个**出口**把端口与 holder 换成"本会话实例"的，就不必改 35 处调用点。
+ *
+ * **不许失明**：管理器没起 / 建实例失败 ⇒ 回退旧单例（LEGACY_PORT + 旧 HOLDER），
+ * 并把失败原因带在回执里；绝不因为路由失败就让会话直接不可用。
+ */
+let INSTANCE_MODE = false
+let MANAGER_URL = 'http://127.0.0.1:9880'
+/** 旧单例端口（回退用；apply() 里写入实际端口） */
+let LEGACY_PORT = resolveHttpPort()
+/** 最近一次路由失败原因（回执里带给用户，不静默） */
+let LAST_ROUTE_ERROR = ''
+
+/** 本次工具调用的会话身份（宿主 ToolExecution：agent.id = SessionId） */
+function execSessionId(): string {
+  const st: any = EXEC_CTX.getStore()
+  const a: any = st && st.agent
+  return a && a.id ? String(a.id) : ''
+}
+
+/** 本次工具调用显式指定的实例名（可选；给了就按它分实例） */
+function execInstanceName(): string {
+  const st: any = EXEC_CTX.getStore()
+  const ar: any = st && st.arguments
+  return ar && typeof ar === 'object' ? String(ar.instance || '') : ''
+}
+
+/** 会话 → 实例的键：显式实例名优先，否则会话 id */
+function routeKey(): string {
+  const explicit = execInstanceName()
+  if (explicit) return explicit
+  return execSessionId()
+}
+
+/** 调实例管理器（HTTP；管理面与数据面分离，管理器挂了也不影响旧单例） */
+async function managerFetch(pathname: string, body?: any, timeoutMs = 120000): Promise<any> {
+  try {
+    const r = await withTimeout(MANAGER_URL + pathname, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }, timeoutMs)
+    const text = await r.text()
+    try { return JSON.parse(text) } catch (e) { return { ok: false, error: 'bad json: ' + text.slice(0, 200) } }
+  } catch (e) {
+    return { ok: false, error: String((e && (e as any).message) || e) }
+  }
+}
+
+/**
+ * 管理器自愈：连不上 ⇒ 拉起一个再等它就绪（最多 10 秒）。
+ * 为什么要：实例模式是**默认路径**（旧单例只是回退），管理器一挂所有会话就失去实例；
+ * 让插件顺手把管理器拉回来，比让用户手动重启 DSH 靠谱。
+ */
+let MANAGER_SPAWN_TRIED = false
+async function ensureManager(): Promise<boolean> {
+  const h = await managerFetch('/health', undefined, 3000)
+  if (h && h.ok) return true
+  if (MANAGER_SPAWN_TRIED) return false
+  MANAGER_SPAWN_TRIED = true
+  try {
+    const script = String(process.env.DSH_BLENDER_INSTANCE_MANAGER_SCRIPT || '/root/dsh/blender/instance/manager.mjs')
+    if (!existsSync(script)) return false
+    const c = spawn(process.execPath, [script, 'serve'], { stdio: 'ignore', detached: true })
+    c.unref()
+    for (let i = 0; i < 20; i++) {
+      await sleep(500)
+      const h2 = await managerFetch('/health', undefined, 2000)
+      if (h2 && h2.ok) { MANAGER_SPAWN_TRIED = false; return true }
+    }
+  } catch (e) { /* 拉不起来就走回退 */ }
+  return false
+}
+
+export interface RouteTarget {
+  port: number
+  holder: string
+  instanceId: string | null
+  routed: boolean
+  error?: string
+}
+
+/**
+ * 解析本次调用该打哪个后端。
+ * @param ensure true=没有就建一个（惰性启动）；false=只查不建
+ */
+async function routeTarget(ensure = true): Promise<RouteTarget> {
+  if (!INSTANCE_MODE) return { port: LEGACY_PORT, holder: HOLDER, instanceId: null, routed: false }
+  const key = routeKey()
+  if (!key) {
+    LAST_ROUTE_ERROR = '本次调用取不到会话身份（exec.agent.id 为空）'
+    return { port: LEGACY_PORT, holder: HOLDER, instanceId: null, routed: false, error: LAST_ROUTE_ERROR }
+  }
+  const r0 = await managerFetch('/instances', { sessionId: key, ensure })
+  let inst: any = r0 && r0.instance
+  if (!inst) {
+    // 管理器可能压根没在跑 ⇒ 自愈一次（拉起 + 等就绪）再重试
+    await ensureManager()
+    const r1 = await managerFetch('/instances', { sessionId: key, ensure })
+    inst = r1 && r1.instance
+    if (!inst) {
+      LAST_ROUTE_ERROR = '实例管理器不可用或建实例失败：' + String((r1 && (r1.error || 'no instance')) || 'unknown')
+      return { port: LEGACY_PORT, holder: HOLDER, instanceId: null, routed: false, error: LAST_ROUTE_ERROR }
+    }
+    return { port: Number(inst.port), holder: 'inst-' + String(inst.id), instanceId: String(inst.id), routed: true }
+  }
+  LAST_ROUTE_ERROR = ''
+  return { port: Number(inst.port), holder: 'inst-' + String(inst.id), instanceId: String(inst.id), routed: true }
+}
+
+/** 路由说明（一行；给回执/日志用） */
+function routeNote(t: RouteTarget): string {
+  if (!INSTANCE_MODE) return ''
+  return t.routed
+    ? '实例 ' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）'
+    : ('已回退旧单例（127.0.0.1:' + String(t.port) + '）：' + String(t.error || '未知原因'))
+}
 
 /**
  * 解析后端响应（v0.8.9 修）：后端有两种形态 ——
@@ -522,11 +675,14 @@ async function backendPost(port: number, path: string, body: any, timeoutMs = 60
   let fired = false
   const timer = setTimeout(() => { fired = true; ac.abort() }, timeoutMs)
   const signal = ext ? AbortSignal.any([ext, ac.signal]) : ac.signal
+  // v2.6.1-fork(delta③)：实例模式下，出口即路由；holder 换成**实例身份**
+  // （inst-<instanceId>）⇒ 会话之间的写租约真正隔离（A 写时 B 只会被自己的实例挡住）。
+  const t = await routeTarget(false)
   try {
-    const r = await fetch(base(port) + path, {
+    const r = await fetch(base(t.port) + path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...(body || {}), holder: HOLDER }),
+      body: JSON.stringify({ ...(body || {}), holder: t.holder }),
       signal,
     })
     const text = await r.text()
@@ -581,7 +737,9 @@ function leasedText(r: any): string | undefined {
 /** 拉一帧 PNG 字节（含耗时）；full=true 走 screenshot_area（整窗口/区域） */
 async function fetchFrame(port: number, size: number, full = false, area = 0): Promise<any> {
   const t0 = Date.now()
-  const url = base(port) + '/frame.png?' + (full ? ('full=1&area=' + String(area)) : ('size=' + String(size)))
+  // v2.6.1-fork(delta③)：出口即路由（本会话实例）
+  const t = await routeTarget(false)
+  const url = base(t.port) + '/frame.png?' + (full ? ('full=1&area=' + String(area)) : ('size=' + String(size)))
   const r = await withTimeout(url, {}, 60000)
   if (!r.ok) throw new Error('frame http ' + String(r.status))
   const buf = new Uint8Array(await r.arrayBuffer())
@@ -591,7 +749,9 @@ async function fetchFrame(port: number, size: number, full = false, area = 0): P
 /** 自定义视角出图：POST /view（view.py）——不动物体、不动用户视口 */
 async function fetchView(port: number, spec: any, timeoutMs = 180000): Promise<any> {
   const t0 = Date.now()
-  const r = await withTimeout(base(port) + '/view', {
+  // v2.6.1-fork(delta③)：出口即路由（本会话实例）
+  const t = await routeTarget(false)
+  const r = await withTimeout(base(t.port) + '/view', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(spec || {}),
@@ -1508,10 +1668,22 @@ export function apply(ctx: any, config: Config): void {
   const port = Number.isFinite(Number(cfgIn.port)) && Number(cfgIn.port) > 0 ? Number(cfgIn.port) : resolveHttpPort()
   const autoStart = cfgIn.autoStart === undefined ? true : !!cfgIn.autoStart
 
-  // v2.6.1：dsh-TUI 宿主半边（契约 v2.3 增补 §S6）。各块按接缝是否存在启用；Web / headless 上什么都不做。
-  if (cfgIn.tui !== false) registerTuiHost(ctx, { port: port, holder: HOLDER })
+  // v2.6.1-fork(delta③)：会话级实例模式。
+  // INSTANCE_MODE=true ⇒ 工具出口按会话路由到专属实例（容器+后端+工作目录+端口），
+  // 旧单例只作为**回退**（管理器不可用时）；实例生命周期由管理器管（空闲 TTL / reap），
+  // 插件不再拉旧单例、也不跑旧单例看护 —— 否则会养出一个没人用的常驻容器。
+  INSTANCE_MODE = cfgIn.instanceMode === true
+  MANAGER_URL = String(cfgIn.instanceManagerUrl || process.env.DSH_BLENDER_INSTANCE_MANAGER || 'http://127.0.0.1:9880')
+  LEGACY_PORT = port
 
-  void (async () => { if (autoStart && !paused) await ensureBackend(port) })()
+  // v2.6.1：dsh-TUI 宿主半边（契约 v2.3 增补 §S6）。各块按接缝是否存在启用；Web / headless 上什么都不做。
+  // 实例模式下 TUI 没有会话概念 ⇒ 指向管理器代理口（转发到"最近使用的实例"）。
+  if (cfgIn.tui !== false) {
+    const tuiPort = INSTANCE_MODE ? Number(new URL(MANAGER_URL).port || 9880) : port
+    registerTuiHost(ctx, { port: tuiPort, holder: HOLDER })
+  }
+
+  if (!INSTANCE_MODE) void (async () => { if (autoStart && !paused) await ensureBackend(port) })()
 
   // 常驻看护：每 15s 探活一次，掉线自动拉起（宿主重启 / 进程被杀 / 端口被回收都能自愈）。
   // 显式 op=stop 会置 paused，看护尊重它，不会跟用户对着干。
@@ -1521,6 +1693,7 @@ export function apply(ctx: any, config: Config): void {
   //   失败才认定卡死，避免把"只是忙"的后端杀掉。
   let probeMisses = 0
   ctx.effect(() => {
+    if (INSTANCE_MODE) return   // 实例模式下没有"旧单例后端"可看护（管理器自己管实例）
     const wd = setInterval(() => {
       void (async () => {
         try {
@@ -1559,6 +1732,7 @@ export function apply(ctx: any, config: Config): void {
       + 'full=true + area=N 走整窗口截图（要看 Blender UI 时用）。回执带 coverage_estimate 与 frame_looks_empty 自诊断；同画面默认不重复附图（省视觉 token），要重发传 force=true。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_see"})。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       max_size: { type: 'integer', description: '最长边像素，默认 560（420 更快，900 更清晰）' },
       session: { type: 'string', description: '无头 worker 会话名（不走 GUI）' },
       auto: { type: 'boolean', description: 'GUI 不可用时自动降级到无头 see（默认 true）' },
@@ -1690,6 +1864,7 @@ export function apply(ctx: any, config: Config): void {
       + ' **P0 无头交互**：GUI 不在线或传 session 时，自动降级到持久无头会话（exec + Workbench see，同一 worker 热路径；不是 job/异步）。'
       + '第一次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个 Blender 会话。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       code: { type: 'string', description: 'Python 代码（在 Blender 主线程执行；预置 bpy/math/mathutils/Vector 与持久内核 K）。与 file 二选一' },
       file: { type: 'string', description: '要执行的 .py 文件路径（WSL / Windows / 相对当前 .blend 均可）—— 长脚本用这个，不必塞进入参' },
       see: { type: 'boolean', description: '是否同时回一帧视口（默认 true）' },
@@ -1773,6 +1948,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_watch',
     description: '观察时间窗/帧序列：先跑 code，再采样最多 6 帧 + 逐帧 hash（判断动画/修改器有没有动）；gui 不可用时自动走无头 worker。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       code: { type: 'string', description: '可选：观察前先执行的 Python' },
       seconds: { type: 'number', description: '观察时长，默认 2 秒（0.2-20）' },
       fps: { type: 'number', description: '采样率，默认 4（0.5-8）' },
@@ -1845,6 +2021,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_cmd',
     description: '直连调用 Blender addon 的任意命令（39 个名字：24 常驻 + 15 集成门控），含 get_world_state_snapshot / drain_human_activity / get_telemetry_consent / set_telemetry_consent / get_addon_info，以及资产类命令（PolyHaven / Sketchfab / Poly Pizza / Hyper3D / Hunyuan3D）。仅 GUI addon 在线时可用；纯无头请用 rt_worker / rt_headless。参数必须匹配 addon 真实签名：get_scene_info 无参、get_object_info 用 name（不是 object_name）。先用 blender_rt_commands 看清单与可用性。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       name: { type: 'string', required: true, description: 'addon 命令名，如 get_world_state_snapshot、search_polyhaven_assets' },
       params: { type: 'json', description: '参数对象（可选），如 {"asset_type":"hdris"}' },
       timeout_ms: { type: 'integer', description: '超时毫秒，默认 120000（下载/生成类可调大）' },
@@ -1869,7 +2046,8 @@ export function apply(ctx: any, config: Config): void {
   ctx.effect(() => ctx.tools.register(vTool({
     name: 'blender_rt_commands',
     description: '列出直连通道当前可用的 addon 命令（19 常驻 + 15 集成门控）与 5 个集成的真实状态（开关是否打开、是否缺 API key）。调 blender_rt_cmd 之前先用它。',
-    parameters: {},
+    parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },},
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => true,
     timeoutMs: T.commands,
@@ -1901,6 +2079,7 @@ export function apply(ctx: any, config: Config): void {
       + '**内环只优化你写的目标函数：收敛后必须换另一条通路复核 + rt_see 看一眼**（防 Goodhart）；跑完场景停在最后一次迭代的参数上，不是 best。'
       + 'spec 字段、ns 契约与可照抄模板见 blender_rt_plan(op="catalog", args={tool:"rt_loop"})。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'start | status | stop | board | export | help | bench' },
       target: { type: 'string', description: 'gui（默认，timers）| session（无头 worker 同步阻塞，推荐 headless 主路径）' },
       session: { type: 'string', description: 'target=session 时的 worker 实例名（默认 dsh-loop）' },
@@ -1970,6 +2149,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_perf',
     description: '【渲染性能】Cycles CPU 瓶颈诊断与优化预设。op=analyze 差分实测「每轮同步 / 每采样 GPU 成本」（占主线程十几秒）；op=apply 应用预设（persistent_data / OptiX 降噪 / denoising_use_gpu / auto_tile off / 采样上限）；op=revert 还原 apply 之前；op=status 看当前设置与已存快照；op=help 契约。实测背景：2318 对象场景每轮 CPU 侧同步 ≈4.2 s、GPU 单采样 ≈0.2 s（1080p）、首次 kernel JIT ≈15 s；persistent_data 让重复渲染 14.6 s → 0.79 s。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'status | analyze | apply | revert | help' },
       args: { type: 'json', description: 'analyze{pct=25,low=1,high=4}；apply{samples=1024,persistent=true,denoiser="OPTIX",denoise_gpu=true,auto_tile=false}' },
     },
@@ -1993,6 +2173,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_opt',
     description: '【对象精简】降 Cycles 每轮场景同步成本（实测 ≈1.4 ms/对象）。op=analyze 列出可安全合并的分组与预计节省；op=join 执行合并（**默认 dry_run=true 只报告**；dry_run=false 才真合并，强烈建议同时给 save_before=<.blend 绝对路径> 先存回退点）。合并规则：同集合 / 同材质 / 同父级 / 无修改器 / 无动画 / 无形态键 / 无自定义属性 / 无实例 / 非库链接。合并后**几何零损失**（面数与顶点数不变），合并对象名为 `<前缀>_MERGED_<材质>`。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'analyze | join | help' },
       args: { type: 'json', description: 'join{dry_run=true, save_before="D:/.../xxx_before_join.blend"}' },
     },
@@ -2023,6 +2204,7 @@ export function apply(ctx: any, config: Config): void {
       + 'attach_images 可回图；shots 多视角；preload 后直调 K.dsh_*_api。'
       + '参数细节见 catalog(tool:rt_headless)。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       script: { type: 'string', description: 'Python 源码（注入 K + bpy/math/mathutils/Vector）' },
       script_file: { type: 'string', description: '直接跑一个 .py 文件（Windows/WSL 路径都行）；比 script= 省事' },
       file: { type: 'string', description: '要打开的 .blend（回执带 inputFile{size,mtime,md5}）；传 .py 会自动当脚本' },
@@ -2161,6 +2343,7 @@ export function apply(ctx: any, config: Config): void {
       + 'op 名拼错回 did_you_mean（带骨架）；参数名写错回"不认识的参数"。',
 
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: '契约 op 或 plan_<op>（见工具描述；op=help / plan_help 出速查）' },
       args: { type: 'json', description: 'op 的参数对象，例如 {"cid":"joint","err":184,"tolerance":220,"identifiable":["dy"]}' },
       path: { type: 'string', description: 'op=report 时的输出路径（Markdown）；省略则只回文本' },
@@ -2204,6 +2387,7 @@ export function apply(ctx: any, config: Config): void {
       + '同一 session 的场景与 K 跨调用保留；空闲 TTL 默认 15 min（DSH_WORKER_TTL_MS 可调）。'
       + '串行、无窗口：依赖 GUI 的 bpy.ops 可能失败；参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_worker"})。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'start | exec | see | reset | status | stop | restart | list' },
       name: { type: 'string', description: '实例名（默认 default）；起多个热会话做批量小活，脏了用 restart 换新会话' },
       code: { type: 'string', description: 'op=exec 的 Python 源码（预置 K/bpy/math/mathutils/Vector）' },
@@ -2311,6 +2495,7 @@ export function apply(ctx: any, config: Config): void {
       + 'restore 默认 into="auto"：载入快照后把会话放回**快照的出处文件**（保存落回自己的工程，不写进快照目录），并在载入前自动留 pre_restore 备份；into="snapshot" 非破坏（只看一眼、不写原文件）。'
       + '⚠️ 边界：对象级**不含拓扑/UV/顶点级改动** —— Boolean、合并、删面之后回不去（revert 会跳过并报告），那种回滚请用文件级 snapshot/restore。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'snapshot | restore | list | prune | mark | revert | marks | drop | help' },
       label: { type: 'string', description: '快照 / mark 的名字（snapshot 省略则用时间戳）' },
       objects: { type: 'string', description: 'mark 时限定对象（逗号分隔；省略 = 全场景）' },
@@ -2360,6 +2545,7 @@ export function apply(ctx: any, config: Config): void {
       + 'apply 的 targets 用 MAT:材质名 / OBJ:对象名 / SCENE（逗号分隔）；不给 targets 只预览（dry_run），给了就实际写入并回报 applied/skipped/errors。'
       + 'export/import 走单个 JSON bundle，便于把配方分享到别的机器或会话。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'save | list | get | apply | delete | export | import | help' },
       name: { type: 'string', description: '配方名（save / get / apply / delete）' },
       kind: { type: 'string', description: '分类（list 可按 kind 过滤），如 material / object / scene' },
@@ -2418,6 +2604,7 @@ export function apply(ctx: any, config: Config): void {
       + 'run 与 job **同一 id 空间**：headless 的 runId（run-…）也能用 status/collect/wait/kill 收；日志落 <outdir>/jobs/<id>/。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_job"})。',
     parameters: {
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
       op: { type: 'string', required: true, description: 'start | status | collect | wait | kill | list' },
       id: { type: 'string', description: 'status/collect/wait/kill 的 id（job-… 或 headless 的 run-…）' },
       script: { type: 'string', description: 'Python 源码（与 headless 同一套前导与结果契约）' },
@@ -2548,7 +2735,10 @@ export function apply(ctx: any, config: Config): void {
       + '**launch**（一键拉起 GUI Blender 并自动 Connect addon：写 boot 脚本 → detached spawn → **轮询 addon 端口**（唯一可信判据）→ 顺手 doctor；幂等）。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"viewport"})。',
     parameters: {
-      op: { type: 'string', required: true, description: 'status | doctor | who | lease | release | start | stop | restart | launch' },
+      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      op: { type: 'string', required: true, description: 'status | doctor | who | lease | release | start | stop | restart | launch | instance（instance = 会话级实例运维面，配合 action=claim/list/release/reap/status）' },
+      action: { type: 'string', description: 'op=instance 时的子动作：status（默认） | claim（建本会话实例） | list（看全部实例） | release（释放本会话实例） | reap（回收空闲与残留）' },
+      instance_id: { type: 'string', description: 'op=instance action=release 时指定要释放的实例 id（默认本会话的）' },
       holder: { type: 'string', description: 'lease/release 的持有者名（默认本插件进程 pid 标识）' },
       ttl_ms: { type: 'integer', description: 'lease 有效期毫秒，默认 600000；写操作会自动续期' },
       force: { type: 'boolean', description: 'lease 时抢占别人的租约（默认 false，被占用返回 409）' },
@@ -2567,8 +2757,69 @@ export function apply(ctx: any, config: Config): void {
     timeoutMs: T.viewport,
     async execute(args: any) {
       const op = String((args && args.op) || 'status')
+
+      // ── v2.6.1-fork(delta③)：会话级实例运维面 ──────────────────────────────
+      // 实例模式下，"后端"不再是全局单例，而是**本会话的实例**（容器+后端+工作目录+端口）。
+      // 这里给出实例的可见面：status / claim（建一个）/ list（看全部）/ release（删本会话）/ reap（回收空闲与残留）。
+      if (op === 'instance') {
+        const action = String((args && args.action) || 'status')
+        const key = routeKey()
+        const mgr = '实例管理器 ' + MANAGER_URL
+        if (!INSTANCE_MODE) {
+          return '当前是**单例模式**（instanceMode=false）：没有会话级实例，工具仍打旧单例 127.0.0.1:' + String(LEGACY_PORT) + '。\n'
+            + '要启用：插件配置 instanceMode=true（或环境 DSH_BLENDER_INSTANCE_MODE=1）后重启 DSH。'
+        }
+        if (!key) return '取不到会话身份（exec.agent.id 为空）⇒ 无法定位实例。'
+        if (action === 'list') {
+          const r = await managerFetch('/instances')
+          const list: any[] = (r && r.instances) || []
+          if (!list.length) return mgr + '：当前没有实例。'
+          return mgr + '（共 ' + String(list.length) + ' 个）：\n' + list.map((i: any) => {
+            const age = Math.round((Date.now() - Number(i.createdAt || 0)) / 1000)
+            const idle = Math.round((Date.now() - Number(i.lastUsedAt || 0)) / 1000)
+            return '· ' + String(i.id) + '  会话=' + String(i.sessionId || '-') + '  端口=' + String(i.port)
+              + '  容器=' + String(i.container) + '  状态=' + String(i.state) + '  存活=' + String(age) + 's  空闲=' + String(idle) + 's'
+          }).join('\n')
+        }
+        if (action === 'reap') {
+          const r = await managerFetch('/instances/reap', {})
+          return mgr + ' reap：' + JSON.stringify((r && r.removed) || []) + (r && r.ok ? '' : '（失败：' + String(r && r.error) + '）')
+        }
+        if (action === 'release') {
+          const targetId = String((args && args.instance_id) || '')
+          let id = targetId
+          if (!id) {
+            const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
+            id = String((r && r.instance && r.instance.id) || '')
+          }
+          if (!id) return '本会话没有实例（key=' + key + '）⇒ 无需释放。'
+          const r = await managerFetch('/instances/' + encodeURIComponent(id) + '/release', {})
+          return '已释放实例 ' + id + '（容器已删、后端已停；产物目录保留 7 天）：' + JSON.stringify(r)
+        }
+        if (action === 'claim') {
+          const r = await managerFetch('/instances', { sessionId: key, ensure: true })
+          const inst: any = r && r.instance
+          if (!inst) return '建实例失败：' + String((r && r.error) || 'unknown')
+          return '已分配实例：' + String(inst.id) + '\n端口=' + String(inst.port) + '  容器=' + String(inst.container)
+            + '\n工作目录=' + String(inst.workDir) + '\n会话键=' + key + (r.created ? '（新建）' : '（复用）')
+        }
+        // status（默认）
+        const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
+        const inst: any = r && r.instance
+        const t = await routeTarget(false)
+        return mgr + '\n会话键=' + key + '\n本会话实例=' + (inst ? (String(inst.id) + '（端口 ' + String(inst.port) + ' · 容器 ' + String(inst.container) + ' · ' + String(inst.state) + '）') : '无（还没建）')
+          + '\n路由=' + routeNote(t)
+      }
+
       if (op === 'start') {
         paused = false
+        // 实例模式："启动" = 惰性建本会话实例
+        if (INSTANCE_MODE) {
+          const t = await routeTarget(true)
+          return t.routed
+            ? ('实例已就绪：' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）')
+            : ('建实例失败：' + String(t.error || 'unknown') + '（已回退旧单例 127.0.0.1:' + String(t.port) + '）')
+        }
         const url = base(port) + '/health'
         if (await probeHttp(url, 800)) return '后端已在运行：' + base(port) + '/（看护已启用）'
         const how = await startBackend(port)
@@ -2579,6 +2830,17 @@ export function apply(ctx: any, config: Config): void {
       }
       if (op === 'restart') {
         paused = false
+        // 实例模式："重启" = 释放本会话实例后重建（换一个新容器 ⇒ 场景干净）
+        if (INSTANCE_MODE) {
+          const key = routeKey()
+          const r0 = await managerFetch('/instances?session=' + encodeURIComponent(key))
+          const old: any = r0 && r0.instance
+          if (old && old.id) await managerFetch('/instances/' + encodeURIComponent(String(old.id)) + '/release', {})
+          const t = await routeTarget(true)
+          return t.routed
+            ? ('实例已重建：' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）' + (old ? '（旧实例 ' + String(old.id) + ' 已释放）' : ''))
+            : ('重建失败：' + String(t.error || 'unknown'))
+        }
         if (child) { try { child.kill() } catch (e) {} child = null }
         killBackendByCmd(port)
         await sleep(500)
@@ -2588,6 +2850,15 @@ export function apply(ctx: any, config: Config): void {
       }
       if (op === 'stop') {
         paused = true
+        // 实例模式："停止" = 释放本会话实例（容器即删，产物保留 7 天）
+        if (INSTANCE_MODE) {
+          const key = routeKey()
+          const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
+          const inst: any = r && r.instance
+          if (!inst || !inst.id) return '本会话没有实例（key=' + key + '）⇒ 无需停止。'
+          const rr = await managerFetch('/instances/' + encodeURIComponent(String(inst.id)) + '/release', {})
+          return '已释放实例 ' + String(inst.id) + '（容器已删、后端已停；产物目录保留）：' + JSON.stringify(rr)
+        }
         const notes: string[] = []
         if (child) { try { child.kill() } catch (e) {} child = null; notes.push('child-句柄已杀') }
         const killed = killBackendByCmd(port)
