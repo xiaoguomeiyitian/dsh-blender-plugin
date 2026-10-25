@@ -329,6 +329,7 @@ function base(port: number): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 import { probeHttp, decideStart, waitHttp } from '../runtime/backend_probe.mjs'
+import { detectFileAlias } from '../runtime/file_guard.mjs'
 
 async function probe(port: number, timeoutMs = 1500): Promise<boolean> {
   const ac = new AbortController()
@@ -1361,6 +1362,12 @@ function headlessHumanText(res: any, ctx: any): string {
     parts.push('⚠️ 路径体检（' + String(r.pathWarnings.length) + ' 条）：' + NLx
       + r.pathWarnings.map((w: any) => '  · ' + String(w.code) + ' · ' + String(w.evidence || w.value || '') + NLx + '    ' + String(w.hint || '')).join(NLx))
   }
+  if (Array.isArray(r.warnings) && r.warnings.length) {
+    parts.push('⚠️ warnings（' + String(r.warnings.length) + ' 条）：' + NLx
+      + r.warnings.map((w: any) => '  · ' + ((w && typeof w === 'object')
+          ? (String(w.code || '') + (w.hint ? (' — ' + String(w.hint)) : JSON.stringify(w)))
+          : String(w))).join(NLx))
+  }
   if (r.stdoutTruncated) parts.push('（stdout 已截断：全量见 logs 路径 / resultPath）')
   const so = String(r.stdoutTail !== undefined && r.stdoutTail !== null ? r.stdoutTail : (r.stdout || ''))
   if (so) parts.push((r.stdoutTruncated ? '--- stdout 尾（已截断）---' : '--- stdout ---') + NLx + (rj !== null && rj !== undefined ? clipText(so, 500, 800) : clipText(so, 1500, 2500)))
@@ -2010,44 +2017,53 @@ export function apply(ctx: any, config: Config): void {
       + (IS_WIN ? '⚠ 给 Windows 路径（D:\\x\\y.py）；' : '⚠ cwd 在 UNC 下，WSL 路径要带开头 /；')
       + 'script_file 自动给 __file__ + sys.path。'
       + '批量几何 / 校验 / 渲染 / 不需要"人在回路看视口"的活都先走这里；"看一眼"用 rt_do/rt_see。'
-      + 'print("HEADLESS " + json.dumps(obj)) 回传（**必须单行 JSON**）。'
+      + 'print("HEADLESS " + json.dumps(obj)) 回传（单行 JSON）。'
       + '默认 factory-startup + EEVEE 前导（engine="cycles"|"keep"|"none" 可改）。'
-      + '**>100 s 或长渲染：as_job=true**（rt_job 收；超时 ≠ 失败）；等待窗口到点回 promoted jobId，结果仍可收。'
-      + 'attach_images=true/"sheet" 可回图；shots 多视角；preload 后直调 K.dsh_*_api。'
+      + '**>100 s 或长渲染：as_job=true**（rt_job 收）；等待窗口到点回 promoted jobId，结果仍可收。'
+      + 'attach_images 可回图；shots 多视角；preload 后直调 K.dsh_*_api。'
       + '参数细节见 catalog(tool:rt_headless)。',
     parameters: {
-      script: { type: 'string', description: 'Python 源码（已注入持久内核 K + bpy/math/mathutils/Vector）' },
+      script: { type: 'string', description: 'Python 源码（注入 K + bpy/math/mathutils/Vector）' },
       script_file: { type: 'string', description: '直接跑一个 .py 文件（Windows/WSL 路径都行）；比 script= 省事' },
       file: { type: 'string', description: '要打开的 .blend（回执带 inputFile{size,mtime,md5}）；传 .py 会自动当脚本' },
       outdir: { type: 'string', description: '产物目录（WSL 路径也收）；跑完列出新文件，并追加到脚本 sys.argv' },
       as_job: { type: 'boolean', description: 'true = 立刻后台化成作业（预期 >100 s 的活推荐直接用）' },
       wait_s: { type: 'number', description: 'as_job 之后最多再等几秒，到点回 jobId' },
       timeout_ms: { type: 'integer', description: '子进程上限，默认 180000，上限 1800000（到点 SIGKILL）' },
-      engine: { type: 'string', description: 'eevee（默认）| cycles | keep | none（纯 numpy/图像任务用 none 省 1–1.5 s）' },
+      engine: { type: 'string', description: 'eevee（默认）| cycles | keep | none（省 1–1.5 s）' },
       preload: { type: 'string', description: '预载 runtime 模块（逗号分隔，如 "audit,qc,qc_render"）→ K.dsh_*_api' },
-      shots: { type: 'json', description: '多视角一体化出图 [{name, from, look_at, lens, res, samples}]' },
+      shots: { type: 'json', description: '多视角出图 [{name,from,look_at,lens,res,samples}]' },
       out_json: { type: 'string', description: '结构化结果落盘路径（>4KB 也会自动落 results/）' },
       env: { type: 'json', description: '子进程环境变量 {KEY:"VALUE"}' },
       args: { type: 'string', description: '追加到 -- 之后的命令行参数（脚本里读 sys.argv / K.args）' },
       workdir: { type: 'string', description: '脚本内 chdir + sys.path 首位' },
-      factory_startup: { type: 'boolean', description: '默认 true；false = 用用户启动文件与偏好（配合 use_user_config）' },
-      use_user_config: { type: 'boolean', description: '透传 BLENDER_USER_CONFIG/SCRIPTS 给无头进程（默认 false）' },
+      factory_startup: { type: 'boolean', description: '默认 true；false = 用用户启动文件与偏好' },
+      use_user_config: { type: 'boolean', description: '透传 BLENDER_USER_CONFIG/SCRIPTS 给无头进程' },
       bootstrap: { type: 'boolean', description: '默认 true = 注入持久内核 K' },
       gpu: { type: 'string', description: '仅 cycles：auto | true（必须 GPU）| false' },
-      include_noise: { type: 'boolean', description: '产物清单含 __pycache__/*.blend1（默认 false）' },
-      attach_images: { type: 'json', description: 'shots 附图：true=最多 3 张；"sheet"=只拼图；默认 false' },
+      include_noise: { type: 'boolean', description: '产物清单含 __pycache__/*.blend1' },
+      attach_images: { type: 'json', description: 'shots 附图：true=3 张，"sheet"=拼图' },
+      hard_exit: { type: 'boolean', description: 'done 后 os._exit(0) 跳过退出拆解；默认 true 规避 5.2.3 退出 AV，false=旧行为（atexit/handlers 照常）' },
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },
     isConcurrencySafe: () => false,
     timeoutMs: T.headless,
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）；无头通道由后端进程代管，先 blender_viewport op=start' }
+      // F-09：工具端必须自己拦 ALIAS / 空串 —— 旧写法 `(args && args.file) || undefined` 在 body 组装前
+      // 就把 falsy 剥成 undefined，引擎侧守卫对工具路径永不触发；参数名误写（blend= 等）静默丢参数＝空场景 ok=true。
+      const aliasKeys = detectFileAlias(args)
+      if (aliasKeys.length) return { text: 'blender_rt_headless 没有参数 ' + aliasKeys.join(', ')
+        + '；打开 .blend 请用 file=。（收到的键：' + Object.keys(args || {}).join(', ') + '）' }
+      const rawFile = args ? args.file : undefined
+      if (typeof rawFile === 'string' && !rawFile.trim()) return { text: 'file= 传了空字符串 —— 本次不会打开任何 .blend'
+        + '（脚本会拿到出厂空场景）；要么给真实 .blend 路径，要么就不要传 file=' }
       const runId = newRunId()
       const asJob = !!(args && args.as_job)
       const waitS = (args && args.wait_s !== undefined && args.wait_s !== null && args.wait_s !== '') ? Number(args.wait_s) : null
       const body: any = {
         script: String((args && args.script) || ''),
-        file: (args && args.file) || undefined,
+        file: (rawFile === undefined || rawFile === null) ? undefined : rawFile,
         outdir: (args && args.outdir) || undefined,
         timeoutMs: (args && args.timeout_ms) ? Number(args.timeout_ms) : undefined,
         factoryStartup: !(args && args.factory_startup === false),
@@ -2063,6 +2079,7 @@ export function apply(ctx: any, config: Config): void {
         env: (args && args.env && typeof args.env === 'object') ? args.env : undefined,
         outJson: (args && args.out_json) || undefined,
         shots: (args && args.shots) || undefined,
+        hardExit: (args && typeof args.hard_exit === 'boolean') ? args.hard_exit : undefined,
         runId: runId,                       // v0.9.3（D1）：客户端生成 → 窗口到点时立刻有可用句柄
       }
       if (args && args.args) body.args = splitArgs(args.args)
@@ -2425,6 +2442,14 @@ export function apply(ctx: any, config: Config): void {
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）' }
       const op = String((args && args.op) || 'list')
+      // F-09 一致性：op=start/run 的 file= 与 rt_headless 同一套拦截（引擎 job 路径已有 validateFileOpt 兜底）
+      if (op === 'start' || op === 'run') {
+        const aliasKeys = detectFileAlias(args)
+        if (aliasKeys.length) return { text: 'blender_rt_job 没有参数 ' + aliasKeys.join(', ')
+          + '；打开 .blend 请用 file=。（收到的键：' + Object.keys(args || {}).join(', ') + '）' }
+        if (args && typeof args.file === 'string' && !args.file.trim()) return { text: 'file= 传了空字符串 —— 本次不会打开任何 .blend'
+          + '（脚本会拿到出厂空场景）；要么给真实 .blend 路径，要么就不要传 file=' }
+      }
       const body: any = { op: op }
       if (args && args.id) body.id = String(args.id)
       if (args && args.script !== undefined) body.script = String(args.script)
