@@ -297,6 +297,16 @@ const T = {
 }
 
 /**
+ * v2.6.1-fork(delta③)：**实例模式下的超时放宽**。
+ * 实例模式的第一次调用要**冷起一整个实例**（容器启动 ~20s + addon 就绪 + 后端 + doctor 复核），
+ * 静态截止盖不住 ⇒ 会话第一句话就超时（而且没有产物，像是工具坏了）。
+ * 这里只放宽**下界**（不足 4 分钟的一律抬到 4 分钟），大截止保持原样。
+ */
+function TO(ms: number): number {
+  return INSTANCE_MODE ? Math.max(ms, 240000) : ms
+}
+
+/**
  * v0.9.2（R2 自证）：插件 import 到的 @deepseek-ai/dsh-tools 是哪一份、哪一版。
  * 本机解析链：插件 node_modules → ~/dsh-harness（fake checkout）→ /usr/lib/node_modules
  * 的**全局安装**。DSH 一升级，这里就是升级后那份；而全局安装位置一变，插件会在载入期
@@ -492,7 +502,7 @@ async function withTimeout(path: string, init: any, timeoutMs: number): Promise<
 
 async function backendJson(port: number, path: string, timeoutMs = 20000, init?: any): Promise<any> {
   // v2.6.1-fork(delta③)：实例模式下，出口即路由 —— 打到本会话的实例，而不是旧单例。
-  const t = await routeTarget(false)
+  const t = await routeTarget(true)
   const r = await withTimeout(base(t.port) + path, init, timeoutMs)
   const text = await r.text()
   try { return JSON.parse(text) } catch (e) { return { ok: false, raw: text.slice(0, 500) } }
@@ -677,7 +687,7 @@ async function backendPost(port: number, path: string, body: any, timeoutMs = 60
   const signal = ext ? AbortSignal.any([ext, ac.signal]) : ac.signal
   // v2.6.1-fork(delta③)：实例模式下，出口即路由；holder 换成**实例身份**
   // （inst-<instanceId>）⇒ 会话之间的写租约真正隔离（A 写时 B 只会被自己的实例挡住）。
-  const t = await routeTarget(false)
+  const t = await routeTarget(true)
   try {
     const r = await fetch(base(t.port) + path, {
       method: 'POST',
@@ -738,7 +748,7 @@ function leasedText(r: any): string | undefined {
 async function fetchFrame(port: number, size: number, full = false, area = 0): Promise<any> {
   const t0 = Date.now()
   // v2.6.1-fork(delta③)：出口即路由（本会话实例）
-  const t = await routeTarget(false)
+  const t = await routeTarget(true)
   const url = base(t.port) + '/frame.png?' + (full ? ('full=1&area=' + String(area)) : ('size=' + String(size)))
   const r = await withTimeout(url, {}, 60000)
   if (!r.ok) throw new Error('frame http ' + String(r.status))
@@ -750,7 +760,7 @@ async function fetchFrame(port: number, size: number, full = false, area = 0): P
 async function fetchView(port: number, spec: any, timeoutMs = 180000): Promise<any> {
   const t0 = Date.now()
   // v2.6.1-fork(delta③)：出口即路由（本会话实例）
-  const t = await routeTarget(false)
+  const t = await routeTarget(true)
   const r = await withTimeout(base(t.port) + '/view', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1752,7 +1762,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => true,
-    timeoutMs: T.see,
+    timeoutMs: TO(T.see),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const size = Math.max(120, Math.min(1600, Number((args && args.max_size) || 560)))
@@ -1878,7 +1888,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.act,
+    timeoutMs: TO(T.act),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const code = String((args && args.code) || '')
@@ -1957,7 +1967,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.watch,
+    timeoutMs: TO(T.watch),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const seconds = Math.max(0.2, Math.min(20, Number((args && args.seconds) || 2)))
@@ -2028,7 +2038,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.cmd,
+    timeoutMs: TO(T.cmd),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const name = String((args && args.name) || '')
@@ -2050,7 +2060,7 @@ export function apply(ctx: any, config: Config): void {
       instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },},
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => true,
-    timeoutMs: T.commands,
+    timeoutMs: TO(T.commands),
     async execute() {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const r = await backendJson(port, '/commands', 120000)
@@ -2096,7 +2106,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.loop,
+    timeoutMs: TO(T.loop),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const op = String((args && args.op) || 'status')
@@ -2155,7 +2165,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.perf,
+    timeoutMs: TO(T.perf),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const op = String((args && args.op) || 'status')
@@ -2179,7 +2189,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.opt,
+    timeoutMs: TO(T.opt),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const op = String((args && args.op) || 'analyze')
@@ -2229,7 +2239,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },
     isConcurrencySafe: () => false,
-    timeoutMs: T.headless,
+    timeoutMs: TO(T.headless),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）；无头通道由后端进程代管，先 blender_viewport op=start' }
       // F-09：工具端必须自己拦 ALIAS / 空串 —— 旧写法 `(args && args.file) || undefined` 在 body 组装前
@@ -2352,7 +2362,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },
     isConcurrencySafe: () => false,
-    timeoutMs: T.plan,
+    timeoutMs: TO(T.plan),
     async execute(argsIn: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const op = String((argsIn && argsIn.op) || 'status')
@@ -2405,7 +2415,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.worker,
+    timeoutMs: TO(T.worker),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const op = String((args && args.op) || 'status')
@@ -2506,7 +2516,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.txn,
+    timeoutMs: TO(T.txn),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）' }
       const op = String((args && args.op) || 'list')
@@ -2559,7 +2569,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.preset,
+    timeoutMs: TO(T.preset),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）' }
       const op = String((args && args.op) || 'list')
@@ -2625,7 +2635,7 @@ export function apply(ctx: any, config: Config): void {
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },
     isConcurrencySafe: () => true,
-    timeoutMs: T.job,
+    timeoutMs: TO(T.job),
     async execute(args: any) {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）' }
       const op = String((args && args.op) || 'list')
@@ -2754,7 +2764,7 @@ export function apply(ctx: any, config: Config): void {
       schema: { type: 'string' },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: String(value) }],
     },
-    timeoutMs: T.viewport,
+    timeoutMs: TO(T.viewport),
     async execute(args: any) {
       const op = String((args && args.op) || 'status')
 
@@ -2803,7 +2813,7 @@ export function apply(ctx: any, config: Config): void {
           return '已分配实例：' + String(inst.id) + '\n端口=' + String(inst.port) + '  容器=' + String(inst.container)
             + '\n工作目录=' + String(inst.workDir) + '\n会话键=' + key + (r.created ? '（新建）' : '（复用）')
         }
-        // status（默认）
+        // status（默认）：只查不建（status 不该有副作用）
         const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
         const inst: any = r && r.instance
         const t = await routeTarget(false)
