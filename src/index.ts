@@ -541,18 +541,31 @@ function execSessionId(): string {
   return a && a.id ? String(a.id) : ''
 }
 
-/** 本次工具调用显式指定的实例名（可选；给了就按它分实例） */
+/** 本次工具调用显式指定的实例（可选）
+ *
+ *  ⚠️ 语义（2026-10-26 修正）：**这是"要跟哪个实例说话"，不是"再造一个会话"**。
+ *  旧实现把它当成会话键去 ensure ⇒ 传一个没见过的值就会**静默开一个新容器**
+ *  （实测踩中：模型从实例列表里抄了个实例 ID 传回来 ⇒ 一个会话开出两个 Blender 容器，
+ *   白吃 570MB 内存）。现在：按**实例 ID** 定位；找不到就**回落本会话自己的实例**，
+ *   绝不凭空多开容器。
+ */
 function execInstanceName(): string {
   const st: any = EXEC_CTX.getStore()
   const ar: any = st && st.arguments
   return ar && typeof ar === 'object' ? String(ar.instance || '') : ''
 }
 
-/** 会话 → 实例的键：显式实例名优先，否则会话 id */
-function routeKey(): string {
-  const explicit = execInstanceName()
-  if (explicit) return explicit
+/** 本会话自己的实例键（会话 id） */
+function sessionKey(): string {
   return execSessionId()
+}
+
+/**
+ * 路由用的键：**默认就是会话 id**（本会话独占一个实例）。
+ * 显式 `instance` 参数**不再**参与键的计算（它改成"按 ID 定位实例"，见 routeTarget）。
+ */
+function routeKey(): string {
+  return sessionKey()
 }
 
 /** 调实例管理器（HTTP；管理面与数据面分离，管理器挂了也不影响旧单例） */
@@ -601,6 +614,8 @@ export interface RouteTarget {
   instanceId: string | null
   routed: boolean
   error?: string
+  /** 路由备注（例如"指定的实例不存在，已改用本会话实例"） */
+  note?: string
 }
 
 /**
@@ -614,6 +629,31 @@ async function routeTarget(ensure = true): Promise<RouteTarget> {
     LAST_ROUTE_ERROR = '本次调用取不到会话身份（exec.agent.id 为空）'
     return { port: LEGACY_PORT, holder: HOLDER, instanceId: null, routed: false, error: LAST_ROUTE_ERROR }
   }
+
+  // ① 显式 `instance` 参数 = **按实例 ID 定位**（"我要跟这个实例说话"）
+  //    找不到就**回落本会话自己的实例**，绝不因为一个没见过的 ID 就多开一个容器。
+  const explicit = execInstanceName()
+  if (explicit) {
+    const rx = await managerFetch('/instances?id=' + encodeURIComponent(explicit))
+    const byId: any = rx && rx.instance
+    if (byId && byId.id) {
+      LAST_ROUTE_ERROR = ''
+      return { port: Number(byId.port), holder: 'inst-' + String(byId.id), instanceId: String(byId.id), routed: true }
+    }
+    // 没找到 ⇒ 继续按本会话路由（ensure 时建本会话的实例），并在回执里说明回落
+    const own = await routeOwnInstance(key, ensure)
+    if (own.routed) {
+      own.note = '指定的实例 ' + explicit + ' 不存在，已改用本会话实例 ' + String(own.instanceId)
+      LAST_ROUTE_ERROR = own.note
+    }
+    return own
+  }
+
+  return await routeOwnInstance(key, ensure)
+}
+
+/** 本会话自己的实例（ensure=true 时惰性创建） */
+async function routeOwnInstance(key: string, ensure: boolean): Promise<RouteTarget> {
   const r0 = await managerFetch('/instances', { sessionId: key, ensure })
   let inst: any = r0 && r0.instance
   if (!inst) {
@@ -634,9 +674,10 @@ async function routeTarget(ensure = true): Promise<RouteTarget> {
 /** 路由说明（一行；给回执/日志用） */
 function routeNote(t: RouteTarget): string {
   if (!INSTANCE_MODE) return ''
-  return t.routed
+  const base = t.routed
     ? '实例 ' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）'
     : ('已回退旧单例（127.0.0.1:' + String(t.port) + '）：' + String(t.error || '未知原因'))
+  return t.note ? base + '（' + String(t.note) + '）' : base
 }
 
 /**
@@ -1742,7 +1783,7 @@ export function apply(ctx: any, config: Config): void {
       + 'full=true + area=N 走整窗口截图（要看 Blender UI 时用）。回执带 coverage_estimate 与 frame_looks_empty 自诊断；同画面默认不重复附图（省视觉 token），要重发传 force=true。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_see"})。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       max_size: { type: 'integer', description: '最长边像素，默认 560（420 更快，900 更清晰）' },
       session: { type: 'string', description: '无头 worker 会话名（不走 GUI）' },
       auto: { type: 'boolean', description: 'GUI 不可用时自动降级到无头 see（默认 true）' },
@@ -1874,7 +1915,7 @@ export function apply(ctx: any, config: Config): void {
       + ' **P0 无头交互**：GUI 不在线或传 session 时，自动降级到持久无头会话（exec + Workbench see，同一 worker 热路径；不是 job/异步）。'
       + '第一次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个 Blender 会话。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       code: { type: 'string', description: 'Python 代码（在 Blender 主线程执行；预置 bpy/math/mathutils/Vector 与持久内核 K）。与 file 二选一' },
       file: { type: 'string', description: '要执行的 .py 文件路径（WSL / Windows / 相对当前 .blend 均可）—— 长脚本用这个，不必塞进入参' },
       see: { type: 'boolean', description: '是否同时回一帧视口（默认 true）' },
@@ -1958,7 +1999,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_watch',
     description: '观察时间窗/帧序列：先跑 code，再采样最多 6 帧 + 逐帧 hash（判断动画/修改器有没有动）；gui 不可用时自动走无头 worker。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       code: { type: 'string', description: '可选：观察前先执行的 Python' },
       seconds: { type: 'number', description: '观察时长，默认 2 秒（0.2-20）' },
       fps: { type: 'number', description: '采样率，默认 4（0.5-8）' },
@@ -2031,7 +2072,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_cmd',
     description: '直连调用 Blender addon 的任意命令（39 个名字：24 常驻 + 15 集成门控），含 get_world_state_snapshot / drain_human_activity / get_telemetry_consent / set_telemetry_consent / get_addon_info，以及资产类命令（PolyHaven / Sketchfab / Poly Pizza / Hyper3D / Hunyuan3D）。仅 GUI addon 在线时可用；纯无头请用 rt_worker / rt_headless。参数必须匹配 addon 真实签名：get_scene_info 无参、get_object_info 用 name（不是 object_name）。先用 blender_rt_commands 看清单与可用性。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       name: { type: 'string', required: true, description: 'addon 命令名，如 get_world_state_snapshot、search_polyhaven_assets' },
       params: { type: 'json', description: '参数对象（可选），如 {"asset_type":"hdris"}' },
       timeout_ms: { type: 'integer', description: '超时毫秒，默认 120000（下载/生成类可调大）' },
@@ -2057,7 +2098,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_commands',
     description: '列出直连通道当前可用的 addon 命令（19 常驻 + 15 集成门控）与 5 个集成的真实状态（开关是否打开、是否缺 API key）。调 blender_rt_cmd 之前先用它。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },},
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },},
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => true,
     timeoutMs: TO(T.commands),
@@ -2089,7 +2130,7 @@ export function apply(ctx: any, config: Config): void {
       + '**内环只优化你写的目标函数：收敛后必须换另一条通路复核 + rt_see 看一眼**（防 Goodhart）；跑完场景停在最后一次迭代的参数上，不是 best。'
       + 'spec 字段、ns 契约与可照抄模板见 blender_rt_plan(op="catalog", args={tool:"rt_loop"})。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'start | status | stop | board | export | help | bench' },
       target: { type: 'string', description: 'gui（默认，timers）| session（无头 worker 同步阻塞，推荐 headless 主路径）' },
       session: { type: 'string', description: 'target=session 时的 worker 实例名（默认 dsh-loop）' },
@@ -2159,7 +2200,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_perf',
     description: '【渲染性能】Cycles CPU 瓶颈诊断与优化预设。op=analyze 差分实测「每轮同步 / 每采样 GPU 成本」（占主线程十几秒）；op=apply 应用预设（persistent_data / OptiX 降噪 / denoising_use_gpu / auto_tile off / 采样上限）；op=revert 还原 apply 之前；op=status 看当前设置与已存快照；op=help 契约。实测背景：2318 对象场景每轮 CPU 侧同步 ≈4.2 s、GPU 单采样 ≈0.2 s（1080p）、首次 kernel JIT ≈15 s；persistent_data 让重复渲染 14.6 s → 0.79 s。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'status | analyze | apply | revert | help' },
       args: { type: 'json', description: 'analyze{pct=25,low=1,high=4}；apply{samples=1024,persistent=true,denoiser="OPTIX",denoise_gpu=true,auto_tile=false}' },
     },
@@ -2183,7 +2224,7 @@ export function apply(ctx: any, config: Config): void {
     name: 'blender_rt_opt',
     description: '【对象精简】降 Cycles 每轮场景同步成本（实测 ≈1.4 ms/对象）。op=analyze 列出可安全合并的分组与预计节省；op=join 执行合并（**默认 dry_run=true 只报告**；dry_run=false 才真合并，强烈建议同时给 save_before=<.blend 绝对路径> 先存回退点）。合并规则：同集合 / 同材质 / 同父级 / 无修改器 / 无动画 / 无形态键 / 无自定义属性 / 无实例 / 非库链接。合并后**几何零损失**（面数与顶点数不变），合并对象名为 `<前缀>_MERGED_<材质>`。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'analyze | join | help' },
       args: { type: 'json', description: 'join{dry_run=true, save_before="D:/.../xxx_before_join.blend"}' },
     },
@@ -2214,7 +2255,7 @@ export function apply(ctx: any, config: Config): void {
       + 'attach_images 可回图；shots 多视角；preload 后直调 K.dsh_*_api。'
       + '参数细节见 catalog(tool:rt_headless)。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       script: { type: 'string', description: 'Python 源码（注入 K + bpy/math/mathutils/Vector）' },
       script_file: { type: 'string', description: '直接跑一个 .py 文件（Windows/WSL 路径都行）；比 script= 省事' },
       file: { type: 'string', description: '要打开的 .blend（回执带 inputFile{size,mtime,md5}）；传 .py 会自动当脚本' },
@@ -2353,7 +2394,7 @@ export function apply(ctx: any, config: Config): void {
       + 'op 名拼错回 did_you_mean（带骨架）；参数名写错回"不认识的参数"。',
 
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: '契约 op 或 plan_<op>（见工具描述；op=help / plan_help 出速查）' },
       args: { type: 'json', description: 'op 的参数对象，例如 {"cid":"joint","err":184,"tolerance":220,"identifiable":["dy"]}' },
       path: { type: 'string', description: 'op=report 时的输出路径（Markdown）；省略则只回文本' },
@@ -2397,7 +2438,7 @@ export function apply(ctx: any, config: Config): void {
       + '同一 session 的场景与 K 跨调用保留；空闲 TTL 默认 15 min（DSH_WORKER_TTL_MS 可调）。'
       + '串行、无窗口：依赖 GUI 的 bpy.ops 可能失败；参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_worker"})。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'start | exec | see | reset | status | stop | restart | list' },
       name: { type: 'string', description: '实例名（默认 default）；起多个热会话做批量小活，脏了用 restart 换新会话' },
       code: { type: 'string', description: 'op=exec 的 Python 源码（预置 K/bpy/math/mathutils/Vector）' },
@@ -2505,7 +2546,7 @@ export function apply(ctx: any, config: Config): void {
       + 'restore 默认 into="auto"：载入快照后把会话放回**快照的出处文件**（保存落回自己的工程，不写进快照目录），并在载入前自动留 pre_restore 备份；into="snapshot" 非破坏（只看一眼、不写原文件）。'
       + '⚠️ 边界：对象级**不含拓扑/UV/顶点级改动** —— Boolean、合并、删面之后回不去（revert 会跳过并报告），那种回滚请用文件级 snapshot/restore。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'snapshot | restore | list | prune | mark | revert | marks | drop | help' },
       label: { type: 'string', description: '快照 / mark 的名字（snapshot 省略则用时间戳）' },
       objects: { type: 'string', description: 'mark 时限定对象（逗号分隔；省略 = 全场景）' },
@@ -2555,7 +2596,7 @@ export function apply(ctx: any, config: Config): void {
       + 'apply 的 targets 用 MAT:材质名 / OBJ:对象名 / SCENE（逗号分隔）；不给 targets 只预览（dry_run），给了就实际写入并回报 applied/skipped/errors。'
       + 'export/import 走单个 JSON bundle，便于把配方分享到别的机器或会话。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'save | list | get | apply | delete | export | import | help' },
       name: { type: 'string', description: '配方名（save / get / apply / delete）' },
       kind: { type: 'string', description: '分类（list 可按 kind 过滤），如 material / object / scene' },
@@ -2614,7 +2655,7 @@ export function apply(ctx: any, config: Config): void {
       + 'run 与 job **同一 id 空间**：headless 的 runId（run-…）也能用 status/collect/wait/kill 收；日志落 <outdir>/jobs/<id>/。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_job"})。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'start | status | collect | wait | kill | list' },
       id: { type: 'string', description: 'status/collect/wait/kill 的 id（job-… 或 headless 的 run-…）' },
       script: { type: 'string', description: 'Python 源码（与 headless 同一套前导与结果契约）' },
@@ -2745,7 +2786,7 @@ export function apply(ctx: any, config: Config): void {
       + '**launch**（一键拉起 GUI Blender 并自动 Connect addon：写 boot 脚本 → detached spawn → **轮询 addon 端口**（唯一可信判据）→ 顺手 doctor；幂等）。'
       + '参数细节见 blender_rt_plan(op="catalog", args={tool:"viewport"})。',
     parameters: {
-      instance: { type: 'string', description: '指定会话级 Blender 实例（可选；默认按本会话自动分配实例）' },
+      instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'status | doctor | who | lease | release | start | stop | restart | launch | instance（instance = 会话级实例运维面，配合 action=claim/list/release/reap/status）' },
       action: { type: 'string', description: 'op=instance 时的子动作：status（默认） | claim（建本会话实例） | list（看全部实例） | release（释放本会话实例） | reap（回收空闲与残留）' },
       instance_id: { type: 'string', description: 'op=instance action=release 时指定要释放的实例 id（默认本会话的）' },
@@ -2796,7 +2837,7 @@ export function apply(ctx: any, config: Config): void {
           return mgr + ' reap：' + JSON.stringify((r && r.removed) || []) + (r && r.ok ? '' : '（失败：' + String(r && r.error) + '）')
         }
         if (action === 'release') {
-          const targetId = String((args && args.instance_id) || '')
+          const targetId = String((args && args.instance_id) || args.instance || '')
           let id = targetId
           if (!id) {
             const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
@@ -2807,14 +2848,25 @@ export function apply(ctx: any, config: Config): void {
           return '已释放实例 ' + id + '（容器已删、后端已停；产物目录保留 7 天）：' + JSON.stringify(r)
         }
         if (action === 'claim') {
-          const r = await managerFetch('/instances', { sessionId: key, ensure: true })
+          // 显式给了 instance ⇒ 按 ID 取（**不新建**）；没给 ⇒ 领本会话的实例
+          const explicit = String((args && args.instance) || '')
+          const r = explicit
+            ? await managerFetch('/instances?id=' + encodeURIComponent(explicit))
+            : await managerFetch('/instances', { sessionId: key, ensure: true })
           const inst: any = r && r.instance
-          if (!inst) return '建实例失败：' + String((r && r.error) || 'unknown')
+          if (!inst) {
+            return explicit
+              ? ('找不到实例 ' + explicit + '（不会替你新建一个；先 blender_viewport op="instance" action="list" 看现有实例）')
+              : ('建实例失败：' + String((r && r.error) || 'unknown'))
+          }
           return '已分配实例：' + String(inst.id) + '\n端口=' + String(inst.port) + '  容器=' + String(inst.container)
             + '\n工作目录=' + String(inst.workDir) + '\n会话键=' + key + (r.created ? '（新建）' : '（复用）')
         }
         // status（默认）：只查不建（status 不该有副作用）
-        const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
+        const explicit = String((args && args.instance) || '')
+        const r = explicit
+          ? await managerFetch('/instances?id=' + encodeURIComponent(explicit))
+          : await managerFetch('/instances?session=' + encodeURIComponent(key))
         const inst: any = r && r.instance
         const t = await routeTarget(false)
         return mgr + '\n会话键=' + key + '\n本会话实例=' + (inst ? (String(inst.id) + '（端口 ' + String(inst.port) + ' · 容器 ' + String(inst.container) + ' · ' + String(inst.state) + '）') : '无（还没建）')

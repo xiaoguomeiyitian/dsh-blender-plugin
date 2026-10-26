@@ -45,6 +45,8 @@ export interface RouteTarget {
     instanceId: string | null;
     routed: boolean;
     error?: string;
+    /** 路由备注（例如"指定的实例不存在，已改用本会话实例"） */
+    note?: string;
 }
 /** 纯决策：命中 ⇒ dup=true 且计数 +1；未命中 ⇒ 记下新 hash。force=true 一律当未命中处理并重置。 */
 export declare function frameDedupe(key: string, hash: string, force?: boolean): {
