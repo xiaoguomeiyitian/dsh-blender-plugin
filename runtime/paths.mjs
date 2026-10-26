@@ -105,6 +105,8 @@ export const VISUALREPORT_PATH = path.join(HERE, 'visualreport.py');
 export const SHAPESOLVE_PATH = path.join(HERE, 'shapesolve.py');
 /** P2 缺陷注入/基线回放评估（evalharness） */
 export const EVALHARNESS_PATH = path.join(HERE, 'evalharness.py');
+/** 曲面算法包：loft/sweep/patch/validate（M0-M2/M4） */
+export const SURFACE_PATH = path.join(HERE, 'surface.py');
 /**
  * 用户 Blender 配置目录（GPU 偏好所在）—— 无头进程默认读不到它，Cycles 会静默回落 CPU。
  * 分享版默认 null（用系统默认配置）；要继承某套配置就设 DSH_BLENDER_USER_CONFIG / 配置项 blenderUserConfig。

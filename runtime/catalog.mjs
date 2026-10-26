@@ -143,6 +143,13 @@ export const PLAN_CATALOG = [
     sk: 'op="shapesolve_solve", args={setup:"...apply(p)...", params:[...], views:[{ref,from,look_at,ortho_scale}], iterations:200}',
     ops: ['solve', 'selftest', 'help'],
     key: '返回 best/逐视 IoU/sensitivity；unidentifiable=该参数在当前视角没信息；ortho_scale 是画面宽的世界尺寸' },
+  { f: 'surface', prefix: 'surface_',
+    when: '复杂曲面要参数化候选：loft/sweep/patch → tessellate → validate → export(GLB)',
+    not: '不是雕刻/有机建模；**M1 线性截面，G1/G2/高级 blend/fillet 仍需 OCCT 后端**；**参考图 IoU / 材质 / 打印检查仍需 qc_render_views / print_report**',
+    sk: 'op="surface_loft", args={sections:[{z_mm:0,points_mm:[[-100,-50],...]},{z_mm:200,...}], tessellation:{u:24}, name:"R1-A"} → op="surface_tessellate"（拿 object）→ op="surface_export", args={spec_or_object:"SURF_loft_xxx", out_dir:"D:/out", name:"R1-A"}',
+
+    ops: ['loft', 'sweep', 'patch', 'tessellate', 'validate', 'export', 'blend', 'offset', 'fit', 'selftest', 'help'],
+    key: '纯 bpy+numpy；surface_validate 返回 verdict/metrics/defects；自交/厚度是近似，不是制造认证；曲面结果要 visualreport/asm_gate 复核' },
   { f: 'gate', prefix: 'gate_',
     when: '把**一个项目的验收判据固化下来、一次跑完**（替掉"每个项目重写一遍门脚本"）',
     not: '不是单点体检（只查一项用 audit_mesh / print_report）；也不做渲染对照（那是 qc_*）；**别自写判据** —— gate_plan→gate_run 读 verdict 三态',
@@ -431,7 +438,7 @@ export const PLAN_READ_ONLY_OPS = [
   'print_overhang', 'print_report', 'print_help', 'sweep_analyze', 'sweep_help',
   'gui_frame', 'gui_shading', 'gui_help', 'render_status', 'render_lock_status',
   'gate_preflight', 'gate_checkpoint', 'model_preflight', 'model_checkpoint',
-  'visualreport_report', 'visualreport_help', 'qc_visual_report', 'shapesolve_help', 'eval_help',
+  'visualreport_report', 'visualreport_help', 'qc_visual_report', 'shapesolve_help', 'eval_help', 'surface_help',
   // P0 新增只读面：参考图量具 / 装配扫描与清单/门 / 白模帮助
   'img_digest', 'img_probe', 'img_measure', 'img_calib',
   'audit_interference', 'audit_overlap', 'audit_snap_floaters', 'interference_report',

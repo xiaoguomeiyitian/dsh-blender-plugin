@@ -12,6 +12,7 @@ DSH × Blender 把 DeepSeek Harness 接到 Blender，让 AI 能在真实 Blender
 - [文档](#文档)
 - [常见问题](#常见问题)
 - [开发](#开发)
+- [支持](#支持)
 - [许可](#许可)
 
 ## 功能
@@ -182,6 +183,10 @@ DSH × Blender 把 DeepSeek Harness 接到 Blender，让 AI 能在真实 Blender
 - 离线测试：npm test
 - 改 src 后重建：DSH_CHECKOUT=/path/to/dsh-harness bash scripts/build.sh
 - 随包 skill 真源：skills/blender-modeling/
+
+## 支持
+
+如果这个项目对你有帮助，欢迎在爱发电支持开发：<https://afdian.com/a/sixtysevenlf>
 
 ## 许可
 

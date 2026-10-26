@@ -3,7 +3,7 @@
 > 这个文件会被 DSH / Claude Code / Cursor / Codex 等助手**自动加载**。动手前先读完（约 1 分钟）。
 > 人类读者请直接看 [README.zh-CN.md](README.zh-CN.md)（[English](README.md)）。
 
-> **当前版本（2026-10-23）**：插件 **v2.6.1** · **15 个模型工具** · plan catalog **33 family / 217 op** ·
+> **当前版本（2026-10-23）**：插件 **v2.6.1** · **15 个模型工具** · plan catalog **34 个 family / 228 个 op** ·
 > Blender 侧 addon **v1.10**（protocol **11**）· 后端 `127.0.0.1:9877` / addon `127.0.0.1:9876`。
 > **验收判据**：GUI 路线 = `doctor` 回 `kind=ok`；纯无头路线（不装 addon）= `blender_rt_worker(start)` + `see` 出图自证
 > （此时 doctor 的 bpy 往返不可达属预期）。**GUI 优先（无头备用）**：GUI 首选，交互式无头（持久 worker + see/watch/reset）
@@ -27,7 +27,7 @@
 | **§8 常见故障**（英文 README 为 §9） | 报错先查表，别自己发明修法 |
 
 **不要凭直觉编**：路径、端口（addon `9876` / 后端 `9877`）、配置项名，一律从 `docs/配置参考.md` 取。
-工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（本地直出，不占往返，33 family / 217 op）；写错会回 `did_you_mean`，照它给的骨架改。
+工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（本地直出，不占往返，34 个 family / 228 个 op）；写错会回 `did_you_mean`，照它给的骨架改。
 
 ## 1. 「装好了」的判据（不是「命令跑完了」）
 
@@ -35,7 +35,7 @@
 
 1. `curl -sS http://127.0.0.1:9877/doctor` → `kind=ok`（**GUI 路线唯一判据**）
 2. `blender_viewport(op="doctor")` → `kind=ok`（GUI 路线）
-3. `blender_rt_plan(op="catalog")` → **33 family / 217 op**（工具数应为 **15**）
+3. `blender_rt_plan(op="catalog")` → **34 个 family / 228 个 op**（工具数应为 **15**）
 4. GUI 可用时 `blender_rt_see(max_size=560)` 回一帧图；**纯无头路线**（不装 addon）用 `blender_rt_worker(op="start")` + `op="see"` 回一帧图自证（doctor 的 bpy 往返不可达属预期）
 
 **没到 `kind=ok` 不要对用户说「安装成功」。** 典型失败与含义：
@@ -45,7 +45,7 @@
 | `blender-unreachable` | Blender 没跑，或 addon 没 Connect | `blender_viewport(op="launch")`；或人工在 Blender 里按 `N` → Connect；纯无头改用 `blender_rt_worker` |
 | `main-thread-busy` | 主线程被渲染 / 模态操作占住 | 等它空下来，或改走无头（`rt_headless` / `rt_worker`） |
 | 后端不可用 | 后端进程没起来 | `blender_viewport(op="start")` |
-| 工具数不是 15 / catalog 不是 33-217 | 插件版本旧，或升级后没重启 DSH | 安装 v2.6.1 → **重启 DSH** → 复核 |
+| 工具数不是 15 / catalog 不是 34-228 | 插件版本旧，或升级后没重启 DSH | 安装 v2.6.1 → **重启 DSH** → 复核 |
 | `value is not lossless JSON` | 宿主与插件回执契约不匹配（旧版/未重载） | 升级 v2.6.1 后**重启 DSH** |
 | 写操作 409 `leased` | 别的会话持有写租约 | `blender_viewport(op="who")`，别强抢 |
 
@@ -62,7 +62,7 @@
 | `blender_rt_cmd` / `blender_rt_commands` | 透传 addon 命令 / 查 39 条命令与 5 个集成状态 |
 | `blender_rt_perf` / `blender_rt_opt` | 渲染性能诊断与优化 / 对象精简安全合并 |
 | `blender_rt_headless` | 独立 `blender -b` 进程（不占 GUI；长活可转 job 作业层收结果） |
-| `blender_rt_plan` | 契约层 + 规划器 + **catalog（33/217）**；`session="auto"` 同步无头路由 |
+| `blender_rt_plan` | 契约层 + 规划器 + **catalog（34/228）**；`session="auto"` 同步无头路由 |
 | `blender_rt_worker` | 交互式无头热会话：`start/exec/see/watch/reset/stop`、`preload`/`warmup`、空闲 TTL |
 | `blender_rt_txn` / `blender_rt_preset` | 事务回滚（文件级/对象级）/ 参数配方库 |
 | `blender_rt_job` | 长任务作业层（`start/status/collect/wait/kill/list`，超时不丢结果） |

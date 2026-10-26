@@ -12,6 +12,7 @@ DSH × Blender connects DeepSeek Harness to Blender so an agent can build, inspe
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
+- [Support](#support)
 - [License](#license)
 
 ## Features
@@ -182,6 +183,10 @@ The plugin exposes 15 tools. All planning, audit, assembly, export, and evaluati
 - Run the offline test suite: npm test
 - Rebuild after changing src: DSH_CHECKOUT=/path/to/dsh-harness bash scripts/build.sh
 - Bundled skill source: skills/blender-modeling/
+
+## Support
+
+If this project is useful to you, you can support its development on Afdian (爱发电): <https://afdian.com/a/sixtysevenlf>
 
 ## License
 

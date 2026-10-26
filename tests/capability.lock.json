@@ -1,6 +1,6 @@
 {
-  "families_count": 33,
-  "ops_count": 217,
+  "families_count": 34,
+  "ops_count": 228,
   "tools_count": 15,
   "tools": [
     "blender_rt_cmd",
@@ -135,6 +135,10 @@
     {
       "f": "shapesolve",
       "ops": 3
+    },
+    {
+      "f": "surface",
+      "ops": 11
     },
     {
       "f": "sweep",

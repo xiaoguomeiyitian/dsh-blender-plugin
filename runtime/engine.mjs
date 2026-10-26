@@ -197,7 +197,7 @@ export const KERNEL_BOOTSTRAP = [
  */
 // S3：目录（数据 + 目录逻辑）外移到 catalog.mjs；此处导入并**重导出公开面**，对外面逐字节不变
 // S3-b：路径与常量外移到 paths.mjs；具名导入 + 重导出，对外面不变
-import { ADDRESS, WIN_TMP, WSL_TMP, LIVE_PNG_WIN, LIVE_PNG_WSL, KIT_PATH, RUNNER_PATH, PERF_PATH, VIEW_PATH, CONTRACT_PATH, PLANNER_PATH, WORKER_PATH, TXN_PATH, QC_PATH, QC_RENDER_PATH, PRESET_PATH, AUDIT_PATH, MONTAGE_PATH, MOTION_PATH, DELIVER_PATH, GENERATOR_PATH, SCULPT_PATH, FIX_PATH, UV_PATH, PRINT_PATH, SWEEP_PATH, MATERIAL_PATH, RENDER_GUARD_PATH, GATE_PATH, IMG_PATH, CALIB_PATH, FACE_PATH, HUMAN_PATH, CLEARANCE_PATH, VEHICLE_PATH, SHAPE_PATH, USER_CONFIG_WIN, USER_SCRIPTS_WIN, GPU_PRELUDE, VIEW_PNG_WIN, VIEW_PNG_WSL, BLENDER_EXE, PATH_HELPERS, ACT_WRAPPER, KIT_SRC, KIT_HASH, GEO_SRC, blenderJoin, PIPELINE_PATH, ASSEMBLY_PATH, BLOCKOUT_PATH, VISUALREPORT_PATH, SHAPESOLVE_PATH, EVALHARNESS_PATH } from './paths.mjs';
+import { ADDRESS, WIN_TMP, WSL_TMP, LIVE_PNG_WIN, LIVE_PNG_WSL, KIT_PATH, RUNNER_PATH, PERF_PATH, VIEW_PATH, CONTRACT_PATH, PLANNER_PATH, WORKER_PATH, TXN_PATH, QC_PATH, QC_RENDER_PATH, PRESET_PATH, AUDIT_PATH, MONTAGE_PATH, MOTION_PATH, DELIVER_PATH, GENERATOR_PATH, SCULPT_PATH, FIX_PATH, UV_PATH, PRINT_PATH, SWEEP_PATH, MATERIAL_PATH, RENDER_GUARD_PATH, GATE_PATH, IMG_PATH, CALIB_PATH, FACE_PATH, HUMAN_PATH, CLEARANCE_PATH, VEHICLE_PATH, SHAPE_PATH, USER_CONFIG_WIN, USER_SCRIPTS_WIN, GPU_PRELUDE, VIEW_PNG_WIN, VIEW_PNG_WSL, BLENDER_EXE, PATH_HELPERS, ACT_WRAPPER, KIT_SRC, KIT_HASH, GEO_SRC, blenderJoin, PIPELINE_PATH, ASSEMBLY_PATH, BLOCKOUT_PATH, VISUALREPORT_PATH, SHAPESOLVE_PATH, EVALHARNESS_PATH, SURFACE_PATH } from './paths.mjs';
 // S8：无头脚本暂存移到 staging.mjs；具名导入 + 重导出，导出面不变
 import { writeHeadlessScript } from './staging.mjs';
 // workdirStagingWarning 也在这个模块里（搬移时一并带过去了）；readJsonSafe 仍是 engine 本地（不进导出面）
@@ -206,7 +206,7 @@ import { baseChildEnv, withWslEnv, workdirStagingWarning } from './proc_env.mjs'
 // 在 addon 通道的 send 包装里记「在飞命令」与「场景变更」，并把捕获结果交给 store。
 // 目录面（15 工具 / 186 op）**不动** —— 宿主集成是用户侧能力，不进 op 目录。
 export { writeHeadlessScript };
-export { ADDRESS, WIN_TMP, WSL_TMP, LIVE_PNG_WIN, LIVE_PNG_WSL, KIT_PATH, RUNNER_PATH, PERF_PATH, VIEW_PATH, CONTRACT_PATH, PLANNER_PATH, WORKER_PATH, TXN_PATH, QC_PATH, QC_RENDER_PATH, PRESET_PATH, AUDIT_PATH, MONTAGE_PATH, MOTION_PATH, DELIVER_PATH, GENERATOR_PATH, SCULPT_PATH, FIX_PATH, UV_PATH, PRINT_PATH, SWEEP_PATH, MATERIAL_PATH, RENDER_GUARD_PATH, GATE_PATH, IMG_PATH, CALIB_PATH, FACE_PATH, HUMAN_PATH, CLEARANCE_PATH, VEHICLE_PATH, SHAPE_PATH, USER_CONFIG_WIN, USER_SCRIPTS_WIN, GPU_PRELUDE, VIEW_PNG_WIN, VIEW_PNG_WSL, BLENDER_EXE, PATH_HELPERS, ACT_WRAPPER, ASSEMBLY_PATH, BLOCKOUT_PATH, VISUALREPORT_PATH, SHAPESOLVE_PATH, EVALHARNESS_PATH };
+export { ADDRESS, WIN_TMP, WSL_TMP, LIVE_PNG_WIN, LIVE_PNG_WSL, KIT_PATH, RUNNER_PATH, PERF_PATH, VIEW_PATH, CONTRACT_PATH, PLANNER_PATH, WORKER_PATH, TXN_PATH, QC_PATH, QC_RENDER_PATH, PRESET_PATH, AUDIT_PATH, MONTAGE_PATH, MOTION_PATH, DELIVER_PATH, GENERATOR_PATH, SCULPT_PATH, FIX_PATH, UV_PATH, PRINT_PATH, SWEEP_PATH, MATERIAL_PATH, RENDER_GUARD_PATH, GATE_PATH, IMG_PATH, CALIB_PATH, FACE_PATH, HUMAN_PATH, CLEARANCE_PATH, VEHICLE_PATH, SHAPE_PATH, USER_CONFIG_WIN, USER_SCRIPTS_WIN, GPU_PRELUDE, VIEW_PNG_WIN, VIEW_PNG_WSL, BLENDER_EXE, PATH_HELPERS, ACT_WRAPPER, ASSEMBLY_PATH, BLOCKOUT_PATH, VISUALREPORT_PATH, SHAPESOLVE_PATH, EVALHARNESS_PATH, SURFACE_PATH };
 
 import { PLAN_CATALOG, TOOL_DETAIL, PLAN_TOOL_MAP, planOpNames, planOpSuggestion, planOpCrossChannelHint, catalogFingerprint, PLAN_READ_ONLY_OPS, PLAN_READ_ONLY, renderFamilyText, planEditDistance, name0StartsWith, probeDiskCatalog, COMMAND_CATALOG } from './catalog.mjs';
 export { PLAN_CATALOG, TOOL_DETAIL, PLAN_TOOL_MAP, planOpNames, planOpSuggestion, planOpCrossChannelHint, catalogFingerprint, PLAN_READ_ONLY_OPS, PLAN_READ_ONLY };
@@ -900,7 +900,7 @@ export function createEngine(opts = {}) {
                         GATE_READY: 'dsh_gate_api', IMG_READY: 'dsh_img_api', CALIB_READY: 'dsh_calib_api', FACE_READY: 'dsh_face_api', HUMAN_READY: 'dsh_human_api', CLEARANCE_READY: 'dsh_clearance_api', VEHICLE_READY: 'dsh_vehicle_api', SHAPE_READY: 'dsh_shape_api', PIPELINE_READY: 'dsh_pipe_api',
                         ASSEMBLY_READY: 'dsh_assembly_api', BLOCKOUT_READY: 'dsh_blockout_api',
                         VISUALREPORT_READY: 'dsh_visualreport_api', SHAPESOLVE_READY: 'dsh_shapesolve_api',
-                        EVALHARNESS_READY: 'dsh_evalharness_api' };
+                        EVALHARNESS_READY: 'dsh_evalharness_api', SURFACE_READY: 'dsh_surface_api' };
   /** 读 runtime 下的 python 模块源码（preload / 作业脚本拼接用） */
   const readModuleSource = (name) => fs.readFileSync(path.join(HERE, String(name).replace(/\.py$/, '') + '.py'), 'utf8');
   /**
@@ -1005,6 +1005,7 @@ export function createEngine(opts = {}) {
   const ensureVisualReport = () => injectModule(needFile(VISUALREPORT_PATH, 'visualreport'), 'VISUALREPORT_READY', 'VISUALREPORT_VERSION');
   const ensureShapesolve = () => injectModule(needFile(SHAPESOLVE_PATH, 'shapesolve'), 'SHAPESOLVE_READY', 'SHAPESOLVE_VERSION');
   const ensureEvalharness = () => injectModule(needFile(EVALHARNESS_PATH, 'evalharness'), 'EVALHARNESS_READY', 'EVALHARNESS_VERSION');
+  const ensureSurface = () => injectModule(needFile(SURFACE_PATH, 'surface'), 'SURFACE_READY', 'SURFACE_VERSION');
   const ensureShape = async () => { await ensureVehicle();
     return injectModule(needFile(SHAPE_PATH, 'shapegen'), 'SHAPE_READY', 'SHAPE_VERSION'); };
   const ensureClearance = () => injectModule(needFile(CLEARANCE_PATH, 'clearance'), 'CLEARANCE_READY', 'CLEAR_VERSION');
@@ -1582,6 +1583,7 @@ export function createEngine(opts = {}) {
       { p: 'visualreport_', n: 13, ensure: ensureVisualReport, api: 'dsh_visualreport_api', ms: 600000 },
       { p: 'shapesolve_', n: 11, ensure: ensureShapesolve, api: 'dsh_shapesolve_api', ms: 900000 },
       { p: 'eval_', n: 5, ensure: ensureEvalharness, api: 'dsh_evalharness_api', ms: 900000 },
+      { p: 'surface_', n: 8, ensure: ensureSurface, api: 'dsh_surface_api', ms: 900000 },
       { p: 'calib_', n: 6, ensure: ensureCalib, api: 'dsh_calib_api', ms: 1800000 },
       { p: 'material_', n: 9, ensure: ensureMaterial, api: 'dsh_material_api', ms: 900000 },
       { p: 'sculpt_', n: 7, ensure: ensureSculpt, api: 'dsh_sculpt_api', ms: 900000 },
