@@ -7,7 +7,7 @@
 1. **安装 / 配置 / 排查前先读** `README.zh-CN.md` 的 §2 前置条件、§3 安装（构建可选）、§8 常见故障（英文见 `README.md` 的 §9）。
    「装好了」的判据：**GUI 路线 = `doctor` 回 `kind=ok`**（`curl -sS http://127.0.0.1:9877/doctor` 与 `blender_viewport(op="doctor")`）；
    **纯无头路线**（不装 addon）用 `blender_rt_worker(start)` + `see` 出图自证（doctor 的 bpy 往返不可达属预期）。
-2. **当前版本 v2.6.1**：**15 个模型工具** · plan catalog **33 family / 217 op** · addon **v1.10**（protocol **11**）。
+2. **当前版本 v2.6.1**：**15 个模型工具** · plan catalog **34 family / 228 op** · addon **v1.10**（protocol **11**）。
    升级插件后必须**重启 DSH**；旧 `MCP for Blender` 自 v2.3 起不再支持（迁移见 [MIGRATIONS.md](MIGRATIONS.md)）。
 3. **GUI 优先（无头备用）**：默认先开 GUI Blender + Connect。无头是备用：`blender_rt_worker`（`start/exec/see/watch/reset`、`preload`/`warmup`、空闲 TTL），
    `blender_rt_do/rt_see` 支持 `session/auto`，`blender_rt_plan(session="auto")` 同步无头路由；只有长活/批处理/无 GUI 才走
@@ -18,7 +18,7 @@
    Blender 实例（容器 + 后端 + 工作目录 + 端口），会话间物理隔离、用完即删；
    运维用 `blender_viewport(op="instance", action="status|claim|list|release|reap")`；
    详见 [plugin-fork-deltas/session-routing.md](plugin-fork-deltas/session-routing.md)。
-   **工具数仍是 15、catalog 仍是 33/217。**
+   **工具数仍是 15、catalog 仍是 34/228。**
 6. **不覆盖 / 未安装依赖**：landmark/人脸（无 cv2/MediaPipe）、OCR、DXF、Open3D/manifold3d/glTF-Validator
    均未安装 —— 不要写成已支持。
-7. 工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（33/217，本地直出）；写错会回 `did_you_mean`，照骨架改。
+7. 工具名 / op 名不确定时先 `blender_rt_plan(op="catalog")`（34/228，本地直出）；写错会回 `did_you_mean`，照骨架改。

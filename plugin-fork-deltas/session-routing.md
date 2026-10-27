@@ -98,7 +98,7 @@ node /root/dsh/blender/instance/manager.selftest.mjs   # 真机：20 条
 
 实机验收（切换后）：`blender_viewport(op="instance", action="status")` 看本会话实例；
 `blender_viewport(op="doctor")` 回 `kind=ok`；`blender_rt_see` 出一帧真 PNG；
-`blender_rt_plan(op="catalog")` 仍为 **33 family / 217 op**、工具数仍为 **15**。
+`blender_rt_plan(op="catalog")` 现为 **34 family / 228 op**（2026-10-26 上游新增 `surface` 家族，delta③ 本身没动工具数）、工具数仍为 **15**。
 
 ## 附录：`instance` 参数的语义（2026-10-26 修正）
 
