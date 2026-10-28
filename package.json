@@ -102,8 +102,7 @@
     "test:dsh-api": "node tests/dsh_api_compat_probe.mjs",
     "test:routes": "node tests/route_contract_selftest.mjs",
     "test:schema": "node tests/schema_resolve_selftest.mjs",
-    "test:search": "node tests/shape_search_selftest.mjs",
-    "build:local": "bash scripts/build-local.sh"
+    "test:search": "node tests/shape_search_selftest.mjs"
   },
   "exports": {
     ".": {

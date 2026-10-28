@@ -92,17 +92,7 @@
 
 ## 4. 改这个仓库本身
 
-- 构建（**改了 `src/` 就必须重建 `lib/`**，否则改动不生效）：
-  - **本机首选**：`bash scripts/build-local.sh`（或 `npm run build:local`）
-    —— 只做 tsc 编译，**不碰 node_modules、不需要 dsh checkout**。
-    自动找 tsc（`DSH_TSC` → 本包 node_modules → `/root/core_ts` 等常见位置）。
-  - 完整构建（会 link 依赖，需要 checkout 已 `pnpm install`）：
-    `DSH_CHECKOUT=/path/to/dsh-harness bash scripts/build.sh`
-  - ⚠️ **实测踩坑（2026-10-29）**：`lib/` 是 tsc 产物，**改了 `src/` 不同步 `lib/` = 修复不生效**，
-    而且现场极具迷惑性（源码明明改对了、工具却还是旧行为）。
-    实测：blender_rt_txn 的错误信息修复（`errText`）提交了、`src/` 也改了，
-    但 `lib/` 里没有 ⇒ 重启后仍显示 `TXN revert 失败 · unknown`，排查绕了很久。
-    ⇒ **改完 `src/` 立刻跑 `npm run build:local`，并把 `lib/` 一起提交。**
+- 构建：`DSH_CHECKOUT=/path/to/dsh-harness bash scripts/build.sh`（`src/` → `lib/`；本仓已提交 `lib/`，改 `src/` 后才必须重建）。
 - 离线自检：`npm test`；真机 HTTP 验收：`node tests/host_routes_selftest.mjs`（需要后端在跑）。
 - 改 `runtime/*.py` 前先看 `tests/README.md`；每个能力族都有对应的 `*_selftest`（含 P0–P2 新增模块与真机脚本）。
 - 文档事实源在包内：`README.zh-CN.md` · `docs/操作教程.md` · `docs/配置参考.md` · `CHANGELOG.md`。
