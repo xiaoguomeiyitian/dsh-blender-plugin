@@ -60,6 +60,14 @@ const targets = [
   ].map((rel) => ({ file: path.join(ROOT, rel), pairs: countPairs })),
 ];
 
+// 文档也要刷：操作教程与随包 skill（两者都会被用户/AI 当事实源读）。
+for (const rel of ["docs/操作教程.md", "skills/blender-modeling/SKILL.md"]) {
+  targets.push({
+    file: path.join(ROOT, rel),
+    pairs: [[/\d+ (?:个 )?family \/ \d+ (?:个 )?op/g, fams + " 个 family / " + ops + " 个 op"]],
+  });
+}
+
 let changed = 0;
 for (const t of targets) {
   if (!fs.existsSync(t.file)) { console.log("跳过（不存在）: " + t.file); continue; }
