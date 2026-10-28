@@ -595,7 +595,7 @@ async function ensureManager(): Promise<boolean> {
   if (MANAGER_SPAWN_TRIED) return false
   MANAGER_SPAWN_TRIED = true
   try {
-    const script = String(process.env.DSH_BLENDER_INSTANCE_MANAGER_SCRIPT || '/root/dsh/blender/instance/manager.mjs')
+    const script = String(process.env.DSH_BLENDER_INSTANCE_MANAGER_SCRIPT || '/root/dsh/dsh-deploy/manager/manager.mjs')
     if (!existsSync(script)) return false
     const c = spawn(process.execPath, [script, 'serve'], { stdio: 'ignore', detached: true })
     c.unref()
