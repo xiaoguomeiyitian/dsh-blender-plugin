@@ -14,7 +14,7 @@
 > 会话之间物理隔离、用完即删（空闲 10 分钟回收，产物留 7 天）。
 > 运维入口 `blender_viewport(op="instance", action="status|claim|list|release|reap")`；
 > 路由失败自动回退单例并说明原因。详见 [plugin-fork-deltas/session-routing.md](plugin-fork-deltas/session-routing.md)
-> 与 [docs/配置参考.md](docs/配置参考.md) §6.5。**工具数仍是 15、catalog 仍是 33/217**（没加模型工具）。
+> 与 [docs/配置参考.md](docs/配置参考.md) §6.5。**工具数仍是 15、catalog 仍是 34/228**（没加模型工具）。
 
 ## 0. 硬规则：先读 README，再动手
 
