@@ -785,6 +785,27 @@ function leasedText(r: any): string | undefined {
     + String(r.hint || '') + '；要强抢：blender_viewport op=lease force=true'
 }
 
+/**
+ * 提取后端回执里的**真实错误信息**。
+ * ⚠️ 后端有两种回执形状：
+ *   ① 顶层带 error：{ok:false, error:"..."}
+ *   ② 嵌在 result 里：{ok:false, result:{ok:false, error:"..."}}（/txn、/plan、/worker 等走这个）
+ * 旧代码只认 ① ⇒ ② 全部显示成 "unknown"（实测：blender_rt_txn op=revert 少传 label
+ * 时回 "参数不匹配: t_revert() missing 1 required positional argument: 'label'"，
+ * 却被显示成 "TXN revert 失败 · unknown"，把真因吞了）。
+ */
+function errText(r: any, fallback = 'unknown'): string {
+  if (!r) return fallback
+  const top = r.error != null ? String(r.error) : ''
+  const res = (r.result && typeof r.result === 'object') ? r.result : null
+  const inner = res && res.error != null ? String(res.error) : ''
+  const raw = r.raw != null ? String(r.raw) : ''
+  // 参数不匹配类错误带 sig_hint（函数签名）—— 那是**最有用**的部分，一并带上
+  const hint = res && res.sig_hint ? ('（签名：' + String(res.sig_hint).slice(0, 400) + '）') : ''
+  const got = top || inner || raw
+  return got ? got + hint : fallback
+}
+
 /** 拉一帧 PNG 字节（含耗时）；full=true 走 screenshot_area（整窗口/区域） */
 async function fetchFrame(port: number, size: number, full = false, area = 0): Promise<any> {
   const t0 = Date.now()
@@ -1965,7 +1986,7 @@ export function apply(ctx: any, config: Config): void {
         if (s) return s
       }
       const parts: string[] = []
-      parts.push(r && r.ok ? 'ACT ok · ' + String(r.ms) + 'ms' : 'ACT 失败 · ' + String((r && (r.error || r.raw)) || 'unknown'))
+      parts.push(r && r.ok ? 'ACT ok · ' + String(r.ms) + 'ms' : 'ACT 失败 · ' + String(errText(r)))
       if (r && Number(r.mainThreadMs) > 1000) parts.push('⚠️ 本次占用 Blender 主线程约 ' + String(r.mainThreadMs) + 'ms —— 超过 ~1s 的重活建议改走 blender_rt_headless / blender_rt_worker（不卡 GUI）')
       if (r && r.stderr && String(r.stderr).trim()) parts.push('stderr: ' + String(r.stderr).trim().slice(0, 1200))
       if (r && r.traceback) parts.push("--- traceback ---" + String.fromCharCode(10) + String(r.traceback).slice(0, 2000))
@@ -2020,7 +2041,7 @@ export function apply(ctx: any, config: Config): void {
       if (args && args.code) {
         const r = await backendPost(port, '/act', { code: String(args.code) }, 180000)
         const lt = leasedText(r)
-        parts.push(lt ? lt : (r && r.ok ? 'ACT ok · ' + String(r.ms) + 'ms' + (r.stdout ? ' · stdout: ' + String(r.stdout).trim().slice(0, 600) : '') : 'ACT 失败 · ' + String((r && (r.error || r.raw)) || '')))
+        parts.push(lt ? lt : (r && r.ok ? 'ACT ok · ' + String(r.ms) + 'ms' + (r.stdout ? ' · stdout: ' + String(r.stdout).trim().slice(0, 600) : '') : 'ACT 失败 · ' + String(errText(r, ''))))
       }
       const total = Math.max(1, Math.min(32, Math.round(seconds * fps)))
       const interval = (seconds * 1000) / total
@@ -2088,7 +2109,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/cmd', { name: name, params: (args && args.params) || {}, timeoutMs: Number((args && args.timeout_ms) || 120000) }, 300000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'CMD ' + name + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'CMD ' + name + ' 失败 · ' + String(errText(r)) }
       const payload = JSON.stringify(r.result)
       const head = 'CMD ' + name + ' ok · ' + String(r.ms) + 'ms · ' + String(payload.length) + ' chars'
       return { text: head + '\n' + (payload.length > 3000 ? payload.slice(0, 3000) + '\n…(已截断)' : payload) }
@@ -2106,7 +2127,7 @@ export function apply(ctx: any, config: Config): void {
     async execute() {
       if (!(await ensureBackend(port))) return { text: '后端不可用（127.0.0.1:' + String(port) + '）。' + BACKEND_HINT }
       const r = await backendJson(port, '/commands', 120000)
-      if (!r || r.ok !== true) return { text: 'COMMANDS 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'COMMANDS 失败 · ' + String(errText(r)) }
       const lines: string[] = []
       lines.push('场景 ' + String(r.scene) + (r.file ? ' · 文件 ' + String(r.file) : ' · 未保存文件'))
       lines.push('可用命令 ' + String(r.total) + ' 条；被集成开关挡住 ' + String((r.disabled || []).length) + ' 条')
@@ -2192,7 +2213,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/loop', payload, 300000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'LOOP ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'LOOP ' + op + ' 失败 · ' + String(errText(r)) }
       return { text: 'LOOP ' + op + ' ' + JSON.stringify(r.result) }
     },
   })), '@dsh-external/dsh-blender-plugin: rt-loop')
@@ -2216,7 +2237,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/perf', { op: op, args: Object.keys(pargs).length ? pargs : undefined }, 600000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'PERF ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'PERF ' + op + ' 失败 · ' + String(errText(r)) }
       return { text: 'PERF ' + op + ' ' + JSON.stringify(r.result) }
     },
   })), '@dsh-external/dsh-blender-plugin: rt-perf')
@@ -2239,7 +2260,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/opt', { op: op === 'join' ? 'opt_join' : 'opt_analyze', args: Object.keys(oargs).length ? oargs : undefined }, 600000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'OPT ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'OPT ' + op + ' 失败 · ' + String(errText(r)) }
       return { text: 'OPT ' + op + ' ' + JSON.stringify(r.result) }
     },
   })), '@dsh-external/dsh-blender-plugin: rt-opt')
@@ -2344,7 +2365,7 @@ export function apply(ctx: any, config: Config): void {
       }
       const lt = leasedText(res)
       if (lt) return { text: lt }
-      if (!res || res.error) return { text: 'HEADLESS 失败 · ' + String((res && (res.error || res.raw)) || 'unknown') + (res && res.hint ? ('\n' + String(res.hint)) : '') }
+      if (!res || res.error) return { text: 'HEADLESS 失败 · ' + String(errText(res)) + (res && res.hint ? ('\n' + String(res.hint)) : '') }
       // 后端 /headless 的信封是 {ok, ms, result:<引擎回执>} —— 结构化字段在 result 里（v0.9.3 起与 job 快照同形）
       const bodyRes: any = (res && res.result && typeof res.result === 'object') ? res.result : null
       // 注意：**不能**拿 "resultJson 为空" 当缺字段 —— 脚本末行不是 JSON 时 resultJson 本来就该是 null（D3）。
@@ -2427,7 +2448,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/plan', { op: op, args: payload }, 300000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'PLAN ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'PLAN ' + op + ' 失败 · ' + String(errText(r)) }
       return await finishPlanResponse(ctx, op, r.result, argsIn)
     },
   })), '@dsh-external/dsh-blender-plugin: rt-plan')
@@ -2549,7 +2570,7 @@ export function apply(ctx: any, config: Config): void {
     parameters: {
       instance: { type: 'string', description: '显式指定要操作的实例 ID（可选，如 71f2ff53c4-58ab；可用 blender_viewport op="instance" action="list" 查）。默认用**本会话独占**的实例；指定的实例不存在时回落到本会话实例，**不会另开新容器**' },
       op: { type: 'string', required: true, description: 'snapshot | restore | list | prune | mark | revert | marks | drop | help' },
-      label: { type: 'string', description: '快照 / mark 的名字（snapshot 省略则用时间戳）' },
+      label: { type: 'string', description: '快照 / mark 的名字（snapshot 省略则用时间戳；**op=revert 时必填** —— 要回滚哪个 mark 就传它的 label）' },
       objects: { type: 'string', description: 'mark 时限定对象（逗号分隔；省略 = 全场景）' },
       keep: { type: 'integer', description: 'prune 只保留最近 N 个快照，默认 5' },
       note: { type: 'string', description: 'snapshot 备注' },
@@ -2572,7 +2593,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/txn', { op: op, args: a }, 300000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'TXN ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'TXN ' + op + ' 失败 · ' + String(errText(r)) }
       const res = (r && r.result) || {}
       const parts: string[] = []
       parts.push('TXN ' + op + ' ok')
@@ -2631,7 +2652,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/preset', { op: op, args: a }, 300000)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'PRESET ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'PRESET ' + op + ' 失败 · ' + String(errText(r)) }
       const res: any = (r && r.result) || {}
       const parts: string[] = []
       parts.push('PRESET ' + op + ' ok')
@@ -2711,7 +2732,7 @@ export function apply(ctx: any, config: Config): void {
       const r = await backendPost(port, '/job', body, budget)
       const lt = leasedText(r)
       if (lt) return { text: lt }
-      if (!r || r.ok !== true) return { text: 'JOB ' + op + ' 失败 · ' + String((r && (r.error || r.raw)) || 'unknown') }
+      if (!r || r.ok !== true) return { text: 'JOB ' + op + ' 失败 · ' + String(errText(r)) }
       if (op === 'list') {
         const js: any[] = (r && r.jobs) || []
         if (!js.length) return { text: '没有作业' }
