@@ -95,6 +95,23 @@ describe('backend-unavailable text carries the routing reason (issue #49)', () =
   })
 })
 
+describe('actErrorText keeps the real cause (issue #47 family)', () => {
+  it('reads result.error / sig_hint / raw instead of reporting unknown', async () => {
+    const { actErrorText } = await import('../../../src/host/http.js')
+    expect(actErrorText({ ok: false, error: 'boom' })).toBe('boom')
+    // 实测签名：真因在 result.error 里，旧写法只认 top.error ⇒ "unknown"
+    expect(
+      actErrorText({ ok: false, result: { error: '参数不匹配: t_revert() missing 1 required' } }),
+    ).toBe('参数不匹配: t_revert() missing 1 required')
+    // sig_hint 是最有用的部分，必须带上
+    expect(actErrorText({ result: { error: 'bad', sig_hint: 't_revert(label)' } })).toBe(
+      'bad（签名：t_revert(label)）',
+    )
+    expect(actErrorText({ raw: 'stdout tail' })).toBe('stdout tail')
+    expect(actErrorText({ ok: false }, 'unknown')).toBe('unknown')
+  })
+})
+
 describe('shots defaults survive software GL (issue #48)', () => {
   it('picks auto engine, a sane resolution and a degradation ladder', () => {
     expect(SHOTS_DEFAULTS.engine).toBe('auto')

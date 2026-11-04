@@ -43,6 +43,28 @@ export async function backendJson(
  * 旧实现整段 JSON.parse，于是任何 **超过 15 s** 的调用都会抛 Extra data → 调用方只看到 exit=undefined（子进程其实跑完了）。
  * 现在：解析失败就按行往前找最后一条非心跳 JSON；同时把心跳条数记进 __heartbeats 供工具层提示。
  */
+/**
+ * /act 失败时的错误文案（移植 fork delta · issue #47 同族）。
+ *
+ * 旧写法只认 `r.error` ⇒ 后端把真因放在 `result.error` / `result.sig_hint` 里时
+ * （实测：blender_rt_txn op=revert 少传 label 回 "参数不匹配: t_revert() missing
+ * 1 required positional argument: 'label'"）全部显示成 "unknown"，真因被吞。
+ * 现在按 top → result.error → result.sig_hint → raw 的顺序取，并带上函数签名；
+ * 还覆盖 r.detail / r.message（后端 ToolFailure 信封的另一种形态）。
+ */
+export function actErrorText(r: unknown, fallback = 'unknown'): string {
+  if (!isRecord(r)) return fallback
+  const top = r.error != null ? text(r.error) : ''
+  const res = isRecord(r.result) ? r.result : null
+  const inner = res && res.error != null ? text(res.error) : ''
+  const detail = r.detail != null ? text(r.detail) : ''
+  const sig = res && res.sig_hint != null ? text(res.sig_hint) : ''
+  const msg = r.message != null ? text(r.message) : ''
+  const raw = r.raw != null ? text(r.raw) : ''
+  const hint = sig ? '（签名：' + sig.slice(0, 400) + '）' : ''
+  return top || inner + hint || detail || msg || raw || fallback
+}
+
 export function parseBackendBody(body: unknown): Record<string, unknown> {
   const t = String(body == null ? '' : body)
   try {

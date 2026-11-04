@@ -2,7 +2,7 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend, sleep } from '../../host/backend/index.js'
-import { backendPost, fetchFrame, leasedText } from '../../host/http.js'
+import { actErrorText, backendPost, fetchFrame, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { guiWatchResponse, workerWatchResponse } from './response.js'
@@ -14,11 +14,7 @@ export async function executeWatch(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   if (!(await ensureBackend(port)))
-    return toolError(
-      'backend_unreachable',
-      backendUnavailableText(port),
-      BACKEND_HINT,
-    )
+    return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
   const seconds = Math.max(0.2, Math.min(20, Number(args.seconds || 2)))
   const fps = Math.max(0.5, Math.min(8, Number(args.fps || 4)))
   const size = Math.max(120, Math.min(1600, Number(args.max_size || 420)))
@@ -35,7 +31,7 @@ export async function executeWatch(
             text(r.ms) +
             'ms' +
             (r.stdout ? ' · stdout: ' + redactSecrets(r.stdout).slice(0, 600) : '')
-          : 'ACT 失败 · ' + text(r.error || r.raw || ''),
+          : 'ACT 失败 · ' + actErrorText(r, ''),
     )
   }
   const total = Math.max(1, Math.min(32, Math.round(seconds * fps)))

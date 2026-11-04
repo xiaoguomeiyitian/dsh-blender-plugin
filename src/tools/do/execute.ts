@@ -2,7 +2,7 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, fetchFrame, leasedText, numTriple } from '../../host/http.js'
+import { actErrorText, backendPost, fetchFrame, leasedText, numTriple } from '../../host/http.js'
 import { frameDedupe, dedupeNote } from '../../utils/frame-cache.js'
 import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
@@ -18,11 +18,7 @@ export async function executeDo(
   port: number,
 ): Promise<unknown> {
   if (!(await ensureBackend(port)))
-    return toolError(
-      'backend_unreachable',
-      backendUnavailableText(port),
-      BACKEND_HINT,
-    )
+    return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
   const code = String(args.code || '')
   const file = args.file ? String(args.file) : null
   if (!code && !file)
@@ -95,7 +91,7 @@ async function doAct(
   if (r.ok !== true)
     return toolError(
       'backend_error',
-      'ACT 失败 · ' + text(r.error || r.raw || 'unknown'),
+      'ACT 失败 · ' + actErrorText(r),
       '用 blender_viewport op=status 确认后端与 addon；需要降级时保留 auto=true',
     )
   const parts = formatActText(r)

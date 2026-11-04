@@ -1,5 +1,102 @@
 # CHANGELOG — dsh-blender-plugin
 
+## 未发布（移植 v2.6.2 fork delta → v3.0.5）
+
+> 分支 `port/v3.0.5-delta`。能力面不变：模型工具仍 **15 个**，plan catalog 仍
+> **34 family / 228 op**，addon 仍是 **38 命令 / protocol 11**（addon 未改动）。
+> 下面每条都注明在 v3 的落点；"上游已吸收"= v3.0.5 已有等价实现，不再重复。
+
+### 已移植
+
+- **① HOST 环境变量覆盖**（fork delta ①）：`runtime/http/config.ts` 的 `HOST` 改为
+  `process.env.DSH_BLENDER_HTTP_HOST || '127.0.0.1'` —— 原写死 127.0.0.1，容器内 addon
+  回访不可达。
+- **② 跨容器 PNG 回传**（fork delta ②）：`runtime/core/engine-api/addon-file.ts` 新增
+  `readAddonFile()`（本地读到就用；ENOENT 时 `execute_code` 让 addon 把同一文件 base64
+  经 socket 回传）；`frame.ts` / `view.ts` 的落盘读回改走它。同机拓扑行为不变。
+- **③ 会话级一次性实例路由**（fork delta ③，v2.6.2 ~2000 行单体 → v3 分层 host）：
+  `src/host/instance-route.ts`（按 `exec.agent.id` 向实例管理器要实例、holder 改
+  `inst-<instanceId>`、出口即路由）+ `src/host/http.ts` 四个出口与
+  `src/host/backend/index.ts` 的 `ensureBackend`/`startBackend` 也带 `routeTarget`；
+  `blender_viewport(op="instance")` 运维面；15 个工具加可选 `instance` 参数与
+  `instanceTimeout` 超时。附修：单例回退端口改用出口自己的 `port`，不吃模块级
+  `LEGACY_PORT`（消除测试间的端口污染）。
+- **qc_render `engine="auto"`**：`runtime/py/render/qc_render_impl/rig.py` 增 `_software_gl()`
+  与 `_set_engine("auto")`（无 `/dev/dri` ⇒ WORKBENCH，有硬件 ⇒ 沿用场景引擎）；
+  `views_render.py` 回执补 `engine_auto{soft_gl,why}`；`selftest.py` 加 H1/H2/H3 断言。
+- **presets MAT 点路径解析**（v2.6.3 issue #47）：`runtime/py/core/presets.py` 增
+  `_lookup()`（`bpy_prop_collection` 按名索引）、`_mat_principled`/`_norm_name`/
+  `_mat_set_input`/`_mat_set`；`inputs.<插槽名>` / `nodes.<节点名>.inputs.<名>` /
+  `<属性>`（回落 Principled 同名输入）/ `defaults.<属性>` 四种写法都落到真实位置；
+  `p_selftest` 接入 `_mat_selftest()`。
+- **入参形状还原**（issue #47 ①）：`runtime/core/provider-shape.ts` 的
+  `restoreProviderShape()`（`{"item":X}`→数组、规范数字字面量、精确 true/false；
+  幂等）在 `runtime/core/dispatcher/index.ts` 的 plan 入参边界与
+  `runtime/http/response.ts` 的 `parseBodyPayload()` 各过一次；14 处路由 body 与 host
+  路由的 `readJsonPayload` 统一走它。
+- **montage kwargs 映射**（issue #47 ②）：`runtime/core/montage-args.ts` 的
+  `MONTAGE_KWARGS`/`montageCallArgs()`/`montageCallCode()` —— 只收
+  `montage(paths, cols, tile, out, …)` 签名认识的关键字、把 `images[]` 映射成 `paths`、
+  结果 `_json.dumps` 化（此前 `"LOOP " + dict` 拼串直接报错）。
+- **shots 软件 GL 默认值**（issue #48）：`runtime/core/scripts.ts` 的 `SHOTS_DEFAULTS`
+  （`engine=auto` / 960×540 / `warmup=false` / `budget_s=120` /
+  `per_view_budget_s=45` / 3 档降质阶梯）；`runtime/execution/headless/script.ts` 与
+  `runtime/execution/jobs/script/preload.ts` 两处调用点改吃它（不再硬编码
+  `engine:'keep'` + 场景分辨率）；`runtime/execution/headless/result.ts` 回执补
+  `engine_scene_after`。
+- **「后端不可用」带出路由原因**（issue #49）：`src/host/instance-route.ts` 新增
+  `backendUnavailableText(port)`（带上 `LAST_ROUTE_ERROR` 管理器原话），14 个工具执行层
+  统一改用 —— 此前只有端口号，实例因内存不足被拒的真正原因整个吞掉。
+- **`/act` 失败文案不再显示 "unknown"**：`src/host/http.ts` 新增 `actErrorText()`——
+  按 top → `result.error` → `sig_hint`（函数签名，最有用）→ `detail` → `message` →
+  `raw` 顺序取真因；`src/tools/watch/execute.ts` 与 `src/tools/do/execute.ts` 的
+  "ACT 失败" 文案改用它。实测场景：`blender_rt_txn op=revert` 少传 `label` 时真因是
+  "参数不匹配: t_revert() missing 1 required positional argument"，旧写法显示 unknown。
+- **sync_counts 覆盖补齐**：`scripts/sync_counts.mjs` 移植 `countPairs`（
+  `catalog 不是 34/228`、`catalog 的/仍是/复核 34/228` 等写法变体）并把「当前状态」类
+  文档入列；实测刷掉 `docs/操作教程.md` 里一处漏网的 `217 个 op` → `228`。
+- **测试**：`tests/unit/js/provider-shape.test.ts`（12 例）覆盖还原规则 + 幂等 +
+  montage 映射/调用体 + shots 默认值与两处调用点静态断言 + 14 处文案全走 helper。
+
+### 上游已吸收（v3.0.5 已有等价实现，不再重复）
+
+- **win32 端口占用原语**（issue #51）：`runtime/win_proc.ts`（`parseNetstatListeners` /
+  `parseTasklistImage` / `winSamePortHolders` / `winKillPids` 同名同义）+ `runtime/ports.ts`
+  + `src/host/backend/{port-holders,process-scan,spawn}.ts`；回归测试在
+  `tests/unit/js/win-spawn.test.ts` 与 `src-backend-spawn.test.ts`（issue #51 静态不变量）。
+- **catalog 探测的 `ELECTRON_RUN_AS_NODE=1`**：已在 `runtime/catalog/logic.ts` 与
+  `src/host/backend/spawn.ts`（v3 连 spawn 侧也覆盖了）。
+- **ERR/model schema resolve 修复**：v3 已吸收。
+- **README / README.zh-CN（`docs/zh/README.md`）/ AI-安装提示词的 addon 兼容性措辞**
+  （"只有 agent 桥冲突，普通 addon 不受影响、不必卸载"）：v3 已有等价表述。
+- **15 个模型工具 / catalog 计数的头部注释**：v3 `src/index.ts` 头部已写
+  "15 个模型工具 … 34 family / 228 op（计数真源在 catalog）"。
+- **package.json 的 `test` 串联**：v3 改为 `node scripts/test.mjs`（vitest + pytest），
+  fork 的逐文件 selftest 串联已被其取代。
+
+### 未移植（附理由）
+
+- **`lib/` 编译产物**：v3 `.gitignore` 约定 `lib/` 由 `prepack`/`npm run build` 生成、
+  绝不手改也不提交；部署侧由 `apply.sh` 跑构建生成。
+- **`scripts/build-local.sh` + `npm run build:local`**：v3 已有 `scripts/build.mjs all` /
+  `build.sh`；按"本地东西尽量放 dsh-deploy"的分工，该脚本住
+  `dsh-deploy/plugins/blender-plugin-delta/build-local.sh`，不进插件仓。
+- **`plugin-fork-deltas/README.md`（部署台账）**：v3 上游无此目录；它描述的是部署副本
+  相对上游的三处 delta 与升级重放流程，属部署侧台账。
+- **`package.json` 包名改回 `@dsh-external/dsh-blender-plugin` / 版本 `3.0.5-deploy.1`**：
+  v3.0.0 起已把包名从 `@dsh-external/dsh-blender-plugin` 改为 `dsh-blender-plugin`
+  （理由见 `MIGRATIONS.md`：旧 scoped 名从未发布到 npm）；改回去会破坏安装命令
+  （`dsh plugin … add dsh-blender-plugin@3.0.5`）、`cordis.patch.yml` 的 id、
+  `client-bundle` / `docs-bilingual` / `release-workflow` 契约。部署侧版本标识由 git
+  tag/部署目录承担，不进 `package.json`。
+- **addon 命令计数文案 `39 个：24 常驻 + 15 集成门控`**：v3 addon 实际是
+  **38 个注册命令（22 base + 16 gated）**（加 ping 的 wire 面才是 39）；v3 现有文案
+  "38 个名字：22 常驻 + 16 集成门控" 与 `AGENTS.md` 的 38 一致，按 fork 的 39 写会造成
+  契约计数失实。
+- **AGENTS.md 的"改 src 必须重建 lib + build-local.sh"段**：v3 `§5 Definition of done`
+  已有等价约束（"lib/ is regenerated, never hand-edited"），且 fork 那段是指向它自带
+  `build-local.sh` 的推荐，v3 无该脚本。
+
 ## v3.0.5（2026-11-04）—— 修复源码注入 __file__ 缺失
 
 - 修复 #73：源码注入的 Python 模块现在会收到真实模块路径作为 `__file__`，`audit` / `qc` / `contract` 等高层算子不再报 `NameError`。
