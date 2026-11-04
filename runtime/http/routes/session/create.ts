@@ -14,8 +14,8 @@ export function createLaunchHandler(E: HttpRouteDeps) {
     _p: string,
   ): Promise<void> {
     const raw = await readBody(req)
-    let payload: Record<string, unknown>
-    payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+    const payload: Record<string, unknown> =
+      (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
     const t0 = Date.now()
     try {
       const out = objArg(await engine.launchBlender(payload))

@@ -35,11 +35,7 @@ export function registerPerf(ctx: HostContext, port: number): void {
           timeoutMs: instanceTimeout(T.perf),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
-              return toolError(
-                'backend_unreachable',
-                backendUnavailableText(port),
-                BACKEND_HINT,
-              )
+              return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
             const op = text(args.op) || 'status'
             // ⚠ 无参时必须给 undefined（给 {} 会让 python 侧多收一个位置参数：实测 "_dsh_perf_status_cycles() takes 0 positional arguments"）
             const pargs = jsonPayload(args.args)

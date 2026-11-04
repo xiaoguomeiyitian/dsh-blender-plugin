@@ -16,11 +16,7 @@ export async function executeWorker(
   port: number,
 ): Promise<unknown> {
   if (!(await ensureBackend(port)))
-    return toolError(
-      'backend_unreachable',
-      backendUnavailableText(port),
-      BACKEND_HINT,
-    )
+    return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
   const op = text(args.op) || 'status'
   const body = buildWorkerBody(op, args)
   const budget = 60000 + Number(body.timeoutMs || 120000)

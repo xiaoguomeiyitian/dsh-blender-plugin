@@ -9,11 +9,7 @@ import { backendUnavailableText } from '../../host/instance-route.js'
 
 export async function executeLoop(port: number, args: Record<string, unknown>): Promise<unknown> {
   if (!(await ensureBackend(port)))
-    return toolError(
-      'backend_unreachable',
-      backendUnavailableText(port),
-      BACKEND_HINT,
-    )
+    return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
   const op = text(args.op) || 'status'
   const target = text(args.target) || 'gui'
   if (target === 'session') return loopViaSession(port, args, op)

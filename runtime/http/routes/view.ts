@@ -9,8 +9,8 @@ export function createViewRoutes(E: HttpRouteDeps) {
   return {
     async view(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown>
-      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const t0 = Date.now()
       try {
         const out = objArg(await engine.view(objArg(payload)))

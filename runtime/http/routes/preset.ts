@@ -10,7 +10,8 @@ export function createPresetRoutes(E: HttpRouteDeps) {
     async preset(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 配方库：save / list / get / delete / apply / export / import / help
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'list')
       const gate = isReadOnly('/preset', op) ? null : leaseGate(payload)
       if (gate) {

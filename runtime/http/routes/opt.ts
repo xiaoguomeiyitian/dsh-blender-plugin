@@ -8,8 +8,8 @@ export function createOptRoutes(E: HttpRouteDeps) {
   return {
     async opt(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown>
-      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'opt_analyze')
       const gate = isReadOnly('/opt', op) ? null : leaseGate(payload)
       if (gate) {

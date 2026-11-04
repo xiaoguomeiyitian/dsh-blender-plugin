@@ -9,7 +9,8 @@ export function createJobRoutes(E: HttpRouteDeps) {
     async job(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 作业层：start / status / collect / kill / list（长任务后台化，渲染一整晚）
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'list')
       const gate = isReadOnly('/job', op) ? null : leaseGate(payload)
       if (gate) {

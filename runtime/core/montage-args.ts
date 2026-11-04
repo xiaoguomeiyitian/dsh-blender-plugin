@@ -12,7 +12,8 @@ export function montageCallArgs(payload: unknown): Record<string, unknown> {
       ? { ...(payload as Record<string, unknown>) }
       : {}
   const inner = P.args
-  if (inner && typeof inner === 'object' && !Array.isArray(inner)) P = { ...(inner as Record<string, unknown>) }
+  if (inner && typeof inner === 'object' && !Array.isArray(inner))
+    P = { ...(inner as Record<string, unknown>) }
   const out: Record<string, unknown> = {}
   for (const k of Object.keys(P)) if (MONTAGE_KWARGS.indexOf(k) >= 0) out[k] = P[k]
   if (!out.paths && P.images) out.paths = P.images

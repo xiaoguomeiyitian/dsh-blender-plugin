@@ -28,11 +28,7 @@ export function registerCommands(ctx: HostContext, port: number): void {
           timeoutMs: instanceTimeout(T.commands),
           async execute() {
             if (!(await ensureBackend(port)))
-              return toolError(
-                'backend_unreachable',
-                backendUnavailableText(port),
-                BACKEND_HINT,
-              )
+              return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
             const r = await backendJson(port, '/commands', 120000)
             if (!r || r.ok !== true)
               return toolError(

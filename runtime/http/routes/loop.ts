@@ -8,8 +8,8 @@ export function createLoopRoutes(E: HttpRouteDeps) {
   return {
     async loop(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown>
-      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'status')
       const gate = isReadOnly('/loop', op) ? null : leaseGate(payload)
       if (gate) {

@@ -31,7 +31,7 @@ export function createAddonFileReader(E: AddonFileDeps) {
       'print("DSHPNG " + json.dumps(base64.b64encode(open(' +
       JSON.stringify(addonPath) +
       ', "rb").read()).decode()))\n'
-    let b64 = ''
+    let b64: string
     try {
       b64 = String(extractTag(await addon.send('execute_code', { code }, 120000), 'DSHPNG') ?? '')
     } catch (e) {
@@ -40,6 +40,7 @@ export function createAddonFileReader(E: AddonFileDeps) {
           String(addonPath) +
           ' | ' +
           String((e && (e as Error).message) || e).slice(0, 200),
+        { cause: e },
       )
     }
     return Buffer.from(b64, 'base64')

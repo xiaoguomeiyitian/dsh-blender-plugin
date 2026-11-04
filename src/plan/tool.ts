@@ -56,11 +56,7 @@ export function registerPlan(ctx: HostContext, port: number): void {
           timeoutMs: instanceTimeout(T.plan),
           async execute(argsIn: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
-              return toolError(
-                'backend_unreachable',
-                backendUnavailableText(port),
-                BACKEND_HINT,
-              )
+              return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
             const op = text(argsIn.op) || 'status'
             const payload = jsonPayload(argsIn.args)
             if (

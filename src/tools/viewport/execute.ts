@@ -143,9 +143,7 @@ async function instanceClaim(args: Record<string, unknown>, key: string): Promis
   const inst = isRecord(r.instance) ? r.instance : null
   if (!inst) {
     return explicit
-      ? '找不到实例 ' +
-          explicit +
-          '（不会替你新建一个；先 op="instance" action="list" 看现有实例）'
+      ? '找不到实例 ' + explicit + '（不会替你新建一个；先 op="instance" action="list" 看现有实例）'
       : '建实例失败：' + String((r && r.error) || 'unknown') + why
   }
   return (
@@ -184,13 +182,13 @@ async function instanceStatus(
     '\n本会话实例=' +
     (inst
       ? text(inst.id) +
-          '（端口 ' +
-          text(inst.port) +
-          ' · 容器 ' +
-          text(inst.container) +
-          ' · ' +
-          text(inst.state) +
-          '）'
+        '（端口 ' +
+        text(inst.port) +
+        ' · 容器 ' +
+        text(inst.container) +
+        ' · ' +
+        text(inst.state) +
+        '）'
       : '无（还没建）') +
     '\n路由=' +
     routeNote(t) +
@@ -262,12 +260,12 @@ async function opStop(port: number): Promise<string> {
     const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
     const inst = isRecord(r.instance) ? r.instance : null
     if (!inst || !inst.id) return '本会话没有实例（key=' + key + '）⇒ 无需停止。'
-    const rr = await managerFetch('/instances/' + encodeURIComponent(text(inst.id)) + '/release', {})
+    const rr = await managerFetch(
+      '/instances/' + encodeURIComponent(text(inst.id)) + '/release',
+      {},
+    )
     return (
-      '已释放实例 ' +
-      text(inst.id) +
-      '（容器已删、后端已停；产物目录保留）：' +
-      JSON.stringify(rr)
+      '已释放实例 ' + text(inst.id) + '（容器已删、后端已停；产物目录保留）：' + JSON.stringify(rr)
     )
   }
   const notes: string[] = []

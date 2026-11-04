@@ -27,8 +27,8 @@ export function createCommandsRoutes(E: HttpRouteDeps) {
     },
     async cmd(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown>
-      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const gate = leaseGate(payload)
       if (gate) {
         json(res, 409, gate)

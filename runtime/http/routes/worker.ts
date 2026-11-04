@@ -9,7 +9,8 @@ export function createWorkerRoutes(E: HttpRouteDeps) {
     async worker(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 热无头会话：start / exec / status / stop / restart（exec 走流式，长代码不会被客户端超时掐断）
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'status')
       // P0：worker 是**独立无头进程**，不碰 live GUI 场景 ⇒ 显式 isolated:true 时不占全局写租约，
       // 否则多会话并行建模会互相 409（C 组调研的 P0 阻塞项）。同一 worker 仍由自身串行。

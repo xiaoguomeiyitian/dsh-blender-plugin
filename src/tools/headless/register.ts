@@ -83,8 +83,7 @@ function buildHeadlessTool(ctx: HostContext, port: number) {
       attach_images: { type: 'json', description: 'shots 附图：true=3 张，"sheet"=拼图' },
       hard_exit: {
         type: 'boolean',
-        description:
-          'done 后 os._exit(0)，默认 true 规避 5.2.3 退出 AV',
+        description: 'done 后 os._exit(0)，默认 true 规避 5.2.3 退出 AV',
       },
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },

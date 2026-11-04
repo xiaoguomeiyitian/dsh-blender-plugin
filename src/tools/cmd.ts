@@ -35,11 +35,7 @@ export function registerCmd(ctx: HostContext, port: number): void {
           timeoutMs: instanceTimeout(T.cmd),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
-              return toolError(
-                'backend_unreachable',
-                backendUnavailableText(port),
-                BACKEND_HINT,
-              )
+              return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
             const name = text(args.name)
             if (!name)
               return toolError(

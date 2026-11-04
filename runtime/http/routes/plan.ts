@@ -9,8 +9,8 @@ export function createPlanRoutes(E: HttpRouteDeps) {
     async plan(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 契约层（S1+S2）与规划器（S3）统一入口：op + args
       const raw = await readBody(req)
-      let payload: Record<string, unknown>
-      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'status')
       const gate = isReadOnly('/plan', op) ? null : leaseGate(payload)
       if (gate) {

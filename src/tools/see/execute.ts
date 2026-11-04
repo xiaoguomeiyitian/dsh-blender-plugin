@@ -21,11 +21,7 @@ export async function executeSee(
   port: number,
 ): Promise<unknown> {
   if (!(await ensureBackend(port)))
-    return toolError(
-      'backend_unreachable',
-      backendUnavailableText(port),
-      BACKEND_HINT,
-    )
+    return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
   const size = Math.max(120, Math.min(1600, Number(args.max_size || 560)))
   const frm = numTriple(args.from) ?? null
   const look = numTriple(args.look_at) ?? null

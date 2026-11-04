@@ -138,8 +138,7 @@ async function ensureManager(): Promise<boolean> {
   MANAGER_SPAWN_TRIED = true
   try {
     const script = String(
-      process.env.DSH_BLENDER_INSTANCE_MANAGER_SCRIPT ||
-        '/root/dsh/dsh-deploy/manager/manager.mjs',
+      process.env.DSH_BLENDER_INSTANCE_MANAGER_SCRIPT || '/root/dsh/dsh-deploy/manager/manager.mjs',
     )
     if (!existsSync(script)) return false
     const c = spawn(process.execPath, [script, 'serve'], { stdio: 'ignore', detached: true })
@@ -159,11 +158,7 @@ async function ensureManager(): Promise<boolean> {
 }
 
 /** 本会话自己的实例（ensure=true 时惰性创建） */
-async function routeOwnInstance(
-  key: string,
-  ensure: boolean,
-  back: number,
-): Promise<RouteTarget> {
+async function routeOwnInstance(key: string, ensure: boolean, back: number): Promise<RouteTarget> {
   const r0 = await managerFetch('/instances', { sessionId: key, ensure })
   let inst = isRecord(r0.instance) ? r0.instance : null
   if (!inst) {
@@ -173,8 +168,7 @@ async function routeOwnInstance(
     inst = isRecord(r1.instance) ? r1.instance : null
     if (!inst) {
       LAST_ROUTE_ERROR =
-        '实例管理器不可用或建实例失败：' +
-        String((r1 && (r1.error || 'no instance')) || 'unknown')
+        '实例管理器不可用或建实例失败：' + String((r1 && (r1.error || 'no instance')) || 'unknown')
       return {
         port: back,
         holder: HOLDER,
@@ -191,13 +185,18 @@ async function routeOwnInstance(
     }
   }
   LAST_ROUTE_ERROR = ''
-  return { port: Number(inst.port), holder: 'inst-' + text(inst.id), instanceId: text(inst.id), routed: true }
+  return {
+    port: Number(inst.port),
+    holder: 'inst-' + text(inst.id),
+    instanceId: text(inst.id),
+    routed: true,
+  }
 }
 
 /**
  * 解析本次调用该打哪个后端。
  * @param ensure true=没有就建一个（惰性启动）；false=只查不建
- * @param fallbackPort 单例回退端口。**必须由调用方（出口）传入本次上下文的 port** —— 
+ * @param fallbackPort 单例回退端口。**必须由调用方（出口）传入本次上下文的 port** ——
  *   模块级的 LEGACY_PORT 会被任何一次 apply() 改写（测试里" backend 不可达"用例就会
  *   用封闭端口 apply 一次），拿它当权威端口会把后续所有出口打到那个已关闭的端口上。
  *

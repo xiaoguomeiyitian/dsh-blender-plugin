@@ -25,8 +25,7 @@ function buildSeeTool(ctx: HostContext, port: number) {
       auto: { type: 'boolean', description: 'GUI 不可用时自动降级到无头 see（默认 true）' },
       full: {
         type: 'boolean',
-        description:
-          '整窗口/区域截图：看 Blender UI 时用；默认 false = 3D 视口离屏帧',
+        description: '整窗口/区域截图：看 Blender UI 时用；默认 false = 3D 视口离屏帧',
       },
       area: { type: 'integer', description: 'full=true 时的区域序号，默认 0' },
       from: {

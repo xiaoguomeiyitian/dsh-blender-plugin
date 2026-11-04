@@ -30,11 +30,7 @@ export function registerOpt(ctx: HostContext, port: number): void {
           timeoutMs: instanceTimeout(T.opt),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
-              return toolError(
-                'backend_unreachable',
-                backendUnavailableText(port),
-                BACKEND_HINT,
-              )
+              return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
             const op = text(args.op) || 'analyze'
             const oargs = jsonPayload(args.args)
             const r = await backendPost(

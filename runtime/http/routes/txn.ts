@@ -10,7 +10,8 @@ export function createTxnRoutes(E: HttpRouteDeps) {
     async txn(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 事务：snapshot / restore / list / prune / mark / revert / marks / drop / help
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const op = String(payload.op || 'list')
       const gate = isReadOnly('/txn', op) ? null : leaseGate(payload)
       if (gate) {

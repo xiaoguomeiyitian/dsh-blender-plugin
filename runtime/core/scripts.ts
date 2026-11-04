@@ -115,7 +115,11 @@ export const SHOTS_DEFAULTS = {
   warmup: false,
   budget_s: 120,
   per_view_budget_s: 45,
-  ladder: [{ scale: 1.0, samples: 32 }, { scale: 0.7, samples: 8 }, { scale: 0.5, samples: 4 }],
+  ladder: [
+    { scale: 1.0, samples: 32 },
+    { scale: 0.7, samples: 8 },
+    { scale: 0.5, samples: 4 },
+  ],
 }
 
 function shotsBlock(args: unknown): string {

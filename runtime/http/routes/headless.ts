@@ -13,7 +13,8 @@ export function createHeadlessRoutes(E: HttpRouteDeps) {
       _p: string,
     ): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
+      const payload: Record<string, unknown> =
+        (parseBodyPayload(raw) as Record<string, unknown> | null) ?? {}
       const gate = leaseGate(payload)
       if (gate) {
         json(res, 409, gate)

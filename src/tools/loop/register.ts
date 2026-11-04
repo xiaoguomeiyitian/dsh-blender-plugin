@@ -29,8 +29,7 @@ export function registerLoop(ctx: HostContext, port: number): void {
             },
             target: {
               type: 'string',
-              description:
-                'gui（默认，timers）| session（无头同步阻塞，headless 推荐）',
+              description: 'gui（默认，timers）| session（无头同步阻塞，headless 推荐）',
             },
             session: {
               type: 'string',
