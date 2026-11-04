@@ -8,10 +8,17 @@ API 挂 K.dsh_preset_api；工具入口 blender_rt_preset。
     配方文件：<K.out_dir>/presets/<name>.json   （自包含：name/kind/tags/note/data/mapping/version/created）
     data 用**点路径**表达：{"data": {"inputs.Base Color": [1,0,0,1], "Base Color": [1,0,0,1]}}
     apply(name, targets) 支持 target 形如：
-        "MAT:材质名"       → 套到材质节点（node_name 可选）
+        "MAT:材质名"       → 套到材质节点（点路径写法见下）
         "OBJ:对象名"       → 套到对象属性
         "SCENE"            → 套到 scene 属性
         省略 targets         → 只返回 dry_run 预览（不写）
+    MAT 目标支持的点路径（v2.6.3 起全部可用）：
+        inputs.<插槽名>            → Principled BSDF 的同名输入（大小写不敏感）
+        nodes.<节点名>.inputs.<名>  → 指定节点的输入
+        nodes.<节点名>.<属性>       → 指定节点的属性
+        <属性>                      → 材质自身属性（diffuse_color…）；没有则回落到
+                                    Principled 的同名输入（base_color → "Base Color"）
+        defaults.<属性>             → 同上（历史写法）
 """
 import bpy
 import json
@@ -102,15 +109,30 @@ def p_delete(name):
     return _j({"ok": False, "error": "没有这个配方: %s" % name})
 
 
+def _lookup(cur, part):
+    """按名字取属性 / 集合成员。
+
+    bpy_prop_collection（node_tree.nodes、node.inputs…）**不能**用 getattr 取成员 ——
+    getattr(node_tree.nodes, "Principled BSDF") 恒为 None ⇒ 此前 "nodes.<名>.inputs.<名>"
+    一律报"路径不存在"。这里先属性、再按名索引。
+    """
+    if isinstance(cur, dict):
+        return cur.get(part)
+    v = getattr(cur, part, None)
+    if v is not None:
+        return v
+    try:
+        return cur[part]
+    except Exception:
+        return None
+
+
 def _get_path(root, path):
     cur = root
     for part in str(path).split("."):
         if cur is None:
             return None, None
-        if isinstance(cur, dict):
-            cur = cur.get(part)
-        else:
-            cur = getattr(cur, part, None)
+        cur = _lookup(cur, part)
     return cur, None
 
 
@@ -118,7 +140,7 @@ def _set_path(root, path, value):
     parts = str(path).split(".")
     cur = root
     for part in parts[:-1]:
-        cur = cur.get(part) if isinstance(cur, dict) else getattr(cur, part, None)
+        cur = _lookup(cur, part)
         if cur is None:
             raise KeyError("路径不存在: %s" % path)
     last = parts[-1]
@@ -126,17 +148,136 @@ def _set_path(root, path, value):
         if last not in cur:
             raise KeyError("键不存在: %s" % path)
         cur[last] = value
-    else:
-        if not hasattr(cur, last):
-            raise KeyError("属性不存在: %s" % path)
-        old = getattr(cur, last)
-        if hasattr(old, "to_tuple") or hasattr(old, "__len__"):
+        return
+    # 末尾落在按名索引的集合上（典型：node.inputs["Base Color"]）⇒ 取成员写它的 default_value
+    if not hasattr(cur, last):
+        member = None
+        try:
+            member = cur[last]
+        except Exception:
+            member = None
+        if member is not None and hasattr(member, "default_value"):
+            member.default_value = value
+            return
+        raise KeyError("属性不存在: %s" % path)
+    old = getattr(cur, last)
+    if hasattr(old, "to_tuple") or hasattr(old, "__len__"):
+        try:
+            setattr(cur, last, type(old)(value) if not isinstance(value, (int, float, str, bool)) else value)
+            return
+        except Exception:
+            pass
+    setattr(cur, last, value)
+
+
+# ── MAT 目标：点路径 → 材质上的真实位置 ────────────────────────────────────
+# 支持的写法（与文档/README 的简写一致）：
+#   inputs.<Name>               → Principled BSDF 节点的 <Name> 输入（文档里的 {"inputs.Base Color":…}）
+#   nodes.<节点名>.inputs.<名>   → 指定节点的输入
+#   nodes.<节点名>.<属性>        → 指定节点的属性
+#   <属性>                       → 材质自身属性（diffuse_color / roughness…）；没有则回落到
+#                                 Principled 的同名输入（大小写不敏感，base_color → "Base Color"）
+#   defaults.<属性>              → 同上（历史写法；此前指向不存在的 node_tree.defaults ⇒ 必报错）
+_PRINCIPLED_TYPE = "BSDF_PRINCIPLED"
+
+
+def _mat_principled(mat):
+    """取材质里的 Principled BSDF 节点（没有则 None）。"""
+    nt = getattr(mat, "node_tree", None)
+    if nt is None:
+        return None
+    nodes = getattr(nt, "nodes", None)
+    if nodes is None:
+        return None
+    try:
+        for n in nodes:
             try:
-                setattr(cur, last, type(old)(value) if not isinstance(value, (int, float, str, bool)) else value)
-                return
+                if getattr(n, "type", "") == _PRINCIPLED_TYPE:
+                    return n
             except Exception:
-                pass
-        setattr(cur, last, value)
+                continue
+    except Exception:
+        pass
+    return _lookup(nodes, "Principled BSDF")
+
+
+def _norm_name(s):
+    """归一化插槽名：大小写 + 空格/下划线/连字符都忽略。
+
+    Principled 的插槽名是 "Base Color" 这种大写带空格形式，用户常写 "base_color"
+    ⇒ 只做大小写比较不够（"base color" ≠ "base_color"），这里统一去掉分隔符再比。
+    """
+    return "".join(ch for ch in str(s).lower() if ch.isalnum())
+
+
+def _mat_set_input(node, name, value, path):
+    """写节点输入：先按原名，再按归一化名（大小写/空格/下划线都忽略）。"""
+    inputs = getattr(node, "inputs", None)
+    if inputs is None:
+        raise KeyError("节点没有 inputs: %s" % path)
+    sock = _lookup(inputs, name)
+    if sock is None:
+        want = _norm_name(name)
+        try:
+            for s in inputs:
+                if _norm_name(getattr(s, "name", "")) == want:
+                    sock = s
+                    break
+        except Exception:
+            sock = None
+    if sock is None:
+        raise KeyError("输入不存在: %s" % path)
+    if hasattr(sock, "default_value"):
+        sock.default_value = value
+        return
+    raise KeyError("输入不可写: %s" % path)
+
+
+def _mat_set(mat, path, value):
+    """把一条点路径写到材质上；返回实际写入的路径说明。失败抛异常（由调用方收进 errors）。"""
+    p = str(path)
+    nt = getattr(mat, "node_tree", None)
+    if nt is None:
+        raise KeyError("材质没有节点树")
+    parts = p.split(".")
+    # ① nodes.<节点名>[....]
+    if parts[0] == "nodes" and len(parts) >= 2:
+        node = _lookup(getattr(nt, "nodes", None), parts[1])
+        if node is None:
+            raise KeyError("节点不存在: %s" % p)
+        rest = ".".join(parts[2:])
+        if not rest:
+            raise KeyError("路径不完整: %s" % p)
+        if rest.startswith("inputs."):
+            _mat_set_input(node, rest[len("inputs."):], value, p)
+        else:
+            _set_path(node, rest, value)
+        return p
+    # ② inputs.<Name> —— 文档里的简写，落 Principled BSDF 的输入
+    if parts[0] == "inputs":
+        if len(parts) < 2:
+            raise KeyError("路径不完整: %s" % p)
+        node = _mat_principled(mat)
+        if node is None:
+            raise KeyError("材质里没有 Principled BSDF 节点")
+        _mat_set_input(node, ".".join(parts[1:]), value, p)
+        return p
+    # ③ defaults.<属性> —— 历史写法，落材质自身属性
+    if parts[0] == "defaults":
+        if len(parts) < 2:
+            raise KeyError("路径不完整: %s" % p)
+        _set_path(mat, ".".join(parts[1:]), value)
+        return "defaults." + ".".join(parts[1:])
+    # ④ 其它：材质自身属性优先；没有就回落到 Principled 的同名输入（大小写不敏感）
+    try:
+        _set_path(mat, p, value)
+        return p
+    except Exception:
+        node = _mat_principled(mat)
+        if node is None:
+            raise
+        _mat_set_input(node, p, value, p)
+        return "inputs." + p
 
 
 def p_apply(name, targets=None, dry_run=False):
@@ -156,16 +297,14 @@ def p_apply(name, targets=None, dry_run=False):
             if mat is None or not mat.use_nodes:
                 report["skipped"].append({"target": t, "why": "材质不存在或未启用节点"})
                 continue
-            root = mat.node_tree
             for path, val in data.items():
-                key = path if path.startswith("nodes.") else ("nodes." + path) if "." in path else ("defaults." + path)
                 try:
-                    if "." not in path:
-                        _set_path(root.defaults, path, val)
-                        report["applied"].append({"target": t, "path": "defaults." + path})
-                    else:
-                        _set_path(root, path, val)
-                        report["applied"].append({"target": t, "path": path})
+                    # v2.6.3（issue #47）：此前三种写法全错 —— "inputs.X" 落到不存在的
+                    # node_tree.inputs、"nodes.<名>.inputs.X" 因 getattr 取不到集合成员而报
+                    # "路径不存在"、"defaults.X" 落到不存在的 node_tree.defaults。
+                    # 现在统一交给 _mat_set 按节点树规则解析。
+                    applied_path = _mat_set(mat, path, val)
+                    report["applied"].append({"target": t, "path": applied_path})
                 except Exception as e:
                     report["errors"].append({"target": t, "path": path, "error": str(e)[:80]})
         elif t.upper().startswith("OBJ:"):
@@ -386,6 +525,63 @@ def p_dispatch(op, args=None):
 
 import sys as _sys
 _K = _sys.modules.get("dsh_rt_kernel")
+def _mat_selftest():
+    """MAT 目标点路径自检（v2.6.3）：三种写法都要落到真实位置。
+
+    覆盖：inputs.<插槽名>（Principled 输入）· nodes.<节点名>.inputs.<名>（指定节点输入）·
+    <属性>（材质自身属性，没有则回落到 Principled 的同名输入）· defaults.<属性>（历史写法）。
+    """
+    ev = {}
+    nm = "__dsh_ps_mat"
+    pn = "__dsh_selftest_mat"
+
+    def _d(x):
+        return json.loads(x) if isinstance(x, str) else x
+
+    try:
+        mat = bpy.data.materials.get(nm) or bpy.data.materials.new(nm)
+        mat.use_nodes = True
+        node = None
+        for n in mat.node_tree.nodes:
+            if getattr(n, "type", "") == _PRINCIPLED_TYPE:
+                node = n
+                break
+        if node is None:
+            return {"mat_selftest": False}
+        base = node.inputs["Base Color"].default_value[:]
+        rough = node.inputs["Roughness"].default_value
+        # ① inputs.<名> → Principled 输入；② nodes.<名>.inputs.<名> → 指定节点输入
+        _d(p_save(pn, {"inputs.Base Color": [0.1, 0.2, 0.3, 1.0],
+                       "nodes.Principled BSDF.inputs.Roughness": 0.42},
+                  kind="material", note="mat-selftest"))
+        ap = _d(p_apply(pn, targets=["MAT:" + nm]))
+        rep = (ap or {}).get("report") or {}
+        ev["mat_apply_no_error"] = isinstance(ap, dict) and not rep.get("errors")
+        ev["mat_applied_count"] = len(rep.get("applied") or []) == 2
+        bc = node.inputs["Base Color"].default_value
+        ev["mat_inputs_base_color"] = abs(bc[0] - 0.1) < 1e-4 and abs(bc[2] - 0.3) < 1e-4
+        ev["mat_nodes_input"] = abs(float(node.inputs["Roughness"].default_value) - 0.42) < 1e-4
+        # ③ 归一化名（base_color → "Base Color"）④ defaults.<属性>（历史写法）
+        _d(p_save(pn, {"base_color": [0.7, 0.0, 0.0, 1.0], "defaults.diffuse_color": [0.0, 0.5, 0.0, 1.0]},
+                  kind="material", note="mat-selftest2"))
+        ap2 = _d(p_apply(pn, targets=["MAT:" + nm]))
+        rep2 = (ap2 or {}).get("report") or {}
+        ev["mat_alias_no_error"] = isinstance(ap2, dict) and not rep2.get("errors")
+        bc2 = node.inputs["Base Color"].default_value
+        ev["mat_alias_base_color"] = abs(bc2[0] - 0.7) < 1e-4
+        dc = mat.diffuse_color
+        ev["mat_defaults_own_attr"] = abs(dc[1] - 0.5) < 1e-4
+        _d(p_delete(pn))
+        # 复原，避免污染场景
+        node.inputs["Base Color"].default_value = base
+        node.inputs["Roughness"].default_value = rough
+        mat.diffuse_color = base
+        bpy.data.materials.remove(mat)
+        return ev
+    except Exception as e:
+        return {"mat_selftest": False, "mat_error": "%s: %s" % (type(e).__name__, str(e)[:160])}
+
+
 def p_selftest():
     # 配方自检：存 -> 取 -> 套到真对象上 -> 值确实生效 -> 删
     import json
@@ -419,6 +615,9 @@ def p_selftest():
         ev["value_applied"] = abs(loc[0] - 1.0) < 1e-4 and abs(loc[2] - 3.0) < 1e-4
         _d(p_delete(pn))
         ev["deleted"] = True
+        # v2.6.3（issue #47）：MAT 目标的点路径此前三种写法全错（inputs.X / nodes.<名>.inputs.X /
+        # defaults.X 都落不到真实位置）⇒ 这里把三种写法一起验。
+        ev.update(_mat_selftest())
         return _j({"ok": all(x is True for x in ev.values()), "evidence": ev, "loc": [round(float(q), 3) for q in loc]})
     except Exception as e:
         return _j({"ok": False, "evidence": ev, "error": "%s: %s" % (type(e).__name__, str(e)[:200])})
