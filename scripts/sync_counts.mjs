@@ -18,6 +18,24 @@ const fams = cat.families.length
 const ops = cat.ops_count
 const dry = process.argv.includes('--dry')
 
+// 文档里数字的写法实测有这些变体，全部要覆盖（移植 fork 的 countPairs）：
+//   「34 family / 228 op」「34 个 family / 228 个 op」「34 family 228 op」
+//   「catalog（34/228）」「catalog 不是 34-228」「catalog 不是 34/228」
+//   「catalog 的 34/228」「catalog 仍是 34/228」「复核 34/228」
+// 一律锚在 family / op / catalog 字样上 ⇒ 端口(9876/9877)、尺寸(3/58 m) 不会被误伤。
+const countPairs = [
+  [/(\d+) family \/ (\d+) op/g, fams + ' family / ' + ops + ' op'],
+  [/(\d+) 个 family \/ (\d+) 个 op/g, fams + ' 个 family / ' + ops + ' 个 op'],
+  [/(\d+) family (\d+) op/g, fams + ' family ' + ops + ' op'],
+  [/(\d{3}) 个 op/g, ops + ' 个 op'],
+  [/catalog（(\d+)\/(\d+)）/g, 'catalog（' + fams + '/' + ops + '）'],
+  [/catalog 不是 (\d+)-(\d+)/g, 'catalog 不是 ' + fams + '-' + ops],
+  [/catalog 不是 (\d+)\/(\d+)/g, 'catalog 不是 ' + fams + '/' + ops],
+  [/catalog 的 (\d+)\/(\d+)/g, 'catalog 的 ' + fams + '/' + ops],
+  [/catalog 仍是 (\d+)\/(\d+)/g, 'catalog 仍是 ' + fams + '/' + ops],
+  [/复核 (\d+)\/(\d+)/g, '复核 ' + fams + '/' + ops],
+]
+
 const targets = [
   // T4 之后 plan 工具的描述在 src/plan/tool.ts（入口 src/index.ts 只做 re-export）。
   {
@@ -36,12 +54,20 @@ const targets = [
   // 同一句在一份文件里出现多次，必须 /g，否则只刷第一处（实测就漏过）。
   ...[path.join(ROOT, '..', 'AGENTS.md'), path.join(ROOT, 'AGENTS.md')].map((file) => ({
     file,
-    pairs: [
-      [/\d+ (?:个 )?family \/ \d+ (?:个 )?op/g, fams + ' 个 family / ' + ops + ' 个 op'],
-      [/catalog（\d+\/\d+）/g, 'catalog（' + fams + '/' + ops + '）'],
-      [/catalog 不是 \d+-\d+/g, 'catalog 不是 ' + fams + '-' + ops],
-    ],
+    pairs: countPairs,
   })),
+  // 「当前状态」类文档：这些文件描述的是**当下**该是什么样，数字必须跟着 catalog 走。
+  // 历史件（发版说明 / 归档验收报告）**不在此列** —— 里面的数字是那时的历史事实，改了就失真。
+  // （移植 fork：v3 的 docs/ 布局下这些文件同样存在。）
+  ...[
+    'docs/给第三方的安装清单.md',
+    'docs/操作教程.md',
+    'docs/宿主集成-接口契约-v2.3增补.md',
+    'docs/配置参考.md',
+    'docs/DSH-更新适配.md',
+    'docs/部署SOP.md',
+    'docs/AI-安装提示词.md',
+  ].map((rel) => ({ file: path.join(ROOT, rel), pairs: countPairs })),
 ]
 
 // 文档也要刷：操作教程与随包 skill（两者都会被用户/AI 当事实源读）。
