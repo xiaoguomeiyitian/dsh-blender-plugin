@@ -61,11 +61,60 @@ def _alpha_stats(path, thr=0.02):
 
 # ---------------------------------------------------------------- 引擎 / 渲染设置
 
+# v2.6.3（issue #48，移植）：软件 GL（容器里没有 /dev/dri，只能 llvmpipe）下 EEVEE 慢 12 倍
+#   —— 实测 320×180 单帧：EEVEE 34.36 s / WORKBENCH 2.76 s / CYCLES(CPU,4) 6.33 s。
+#   engine="auto" ⇒ 软件光栅用 WORKBENCH（有真 GPU 就沿用场景引擎）。
+_SOFT_GL = {"checked": False, "soft": False, "why": ""}
+
+
+def _software_gl():
+    """这次渲染是不是只能软件光栅？返回 (bool, 原因)。
+
+    判据（先环境后设备）：
+      ① 显式软件开关：LIBGL_ALWAYS_SOFTWARE=1 / GALLIUM_DRIVER=llvmpipe|softpipe|swrast
+         / MESA_LOADER_DRIVER_OVERRIDE 同值 ⇒ 必是软件光栅；
+      ② 没有 /dev/dri 设备 ⇒ 容器里常见的软件光栅（EGL/llvmpipe）；
+      ③ 其余 ⇒ 假定有硬件（不猜型号，判据只到"软件/硬件"这一层）。
+    """
+    if _SOFT_GL["checked"]:
+        return _SOFT_GL["soft"], _SOFT_GL["why"]
+    soft = False
+    why = "未判定（默认按硬件处理）"
+    for k in ("LIBGL_ALWAYS_SOFTWARE", "GALLIUM_DRIVER", "MESA_LOADER_DRIVER_OVERRIDE"):
+        v = str(os.environ.get(k) or "").strip().lower()
+        if v in ("1", "true", "yes", "llvmpipe", "softpipe", "swrast"):
+            soft = True
+            why = "环境变量 %s=%s ⇒ 软件光栅" % (k, v)
+            break
+    if not soft:
+        try:
+            devs = os.listdir("/dev/dri")
+        except Exception:
+            devs = []
+        if not devs:
+            soft = True
+            why = "无 /dev/dri 设备（容器内只能软件光栅）"
+        else:
+            why = "有 /dev/dri 设备（%d 个）" % len(devs)
+    _SOFT_GL.update({"checked": True, "soft": soft, "why": why})
+    return soft, why
+
+
 def _set_engine(mode):
-    """mode: eevee | cycles | keep。返回 (before, after) 供还原。"""
+    """mode: eevee | cycles | keep | auto。返回 (before, after) 供还原。"""
     sc = bpy.context.scene
     before = sc.render.engine
     m = str(mode or "keep").lower()
+    if m in ("auto", "a"):
+        soft, why = _software_gl()
+        if soft:
+            # 软件光栅：EEVEE 慢 12 倍且可能整批撞超时 ⇒ 走 WORKBENCH（同样的 GPU 模块，离屏可画）
+            try:
+                sc.render.engine = "BLENDER_WORKBENCH"
+            except Exception:
+                pass
+            return before, sc.render.engine
+        m = "keep"
     if m in ("eevee", "eevee_rt", "e"):
         try:
             sc.render.engine = "BLENDER_EEVEE"

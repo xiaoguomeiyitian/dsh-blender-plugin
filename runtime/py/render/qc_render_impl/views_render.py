@@ -7,7 +7,7 @@
 from .common import *  # noqa: F401,F403
 from .lock import _lock_release
 from .geom import _apply_step, _corners, _db_counts, _focus_box, _md5, _montage_api, _project_px, _safe, _solve_view
-from .rig import _add_rig, _aim_rig, _alpha_stats, _device_info, _device_line, _device_live, _device_slim, _engine_label
+from .rig import _add_rig, _aim_rig, _alpha_stats, _device_info, _device_line, _device_live, _device_slim, _engine_label, _SOFT_GL
 from .parts import _legend_line_count, _parts_override, _parts_restore, _write_parts_legend
 
 
@@ -551,7 +551,16 @@ def _qv_finish_out(st):
                "total_ms": total_ms, "render_ms": spent_ms,
                "budget_ms": budget_ms, "within_budget": within, "stopped_early": stopped_early,
                "skipped_views": skipped_views,
-               "engine": _engine_label(), "engine_mode": eng_mode, "samples": samples,
+               # v2.6.3（issue #48 补，移植）：**这批实际用的引擎** —— 原先这里取
+               # _engine_label()（渲完**还原后**的场景引擎），auto/软件光栅下与实际渲染引擎不同
+               # （例：实际 WORKBENCH，还原后 EEVEE+RT）⇒ 汇总/作业层只报 engine 会自相矛盾。
+               # 现在："engine" = 这批实际用的引擎；"engine_scene_after" = 还原后的场景引擎。
+               "engine": eng_after,
+               "engine_scene_after": _engine_label(),
+               "engine_mode": eng_mode, "samples": samples,
+               # v2.6.3（issue #48，移植）：engine="auto" 的判定依据（软件光栅 ⇒ 走 WORKBENCH）
+               "engine_auto": ({"soft_gl": _SOFT_GL["soft"], "why": _SOFT_GL["why"]}
+                               if str(eng_mode).lower() in ("auto", "a") else None),
                # ---- v0.8.11（B）：本批实际的渲染设备（顶部汇总 = **渲完之后**的实测回读，最接近"实际用的"）
                "device": device_used,
                "device_before_render": dev_batch,

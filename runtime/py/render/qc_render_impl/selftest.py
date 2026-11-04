@@ -5,6 +5,7 @@ from .lock import _lock_path, render_lock
 from .geom import _collect_objs, _corners, _db_counts, _project_px, _solve_view
 from .parts import _legend_line_count
 from .main import qc_render_views
+from .rig import _set_engine, _software_gl, _SOFT_GL
 
 def _selftest_projection():
     """老自检内容（v0.8.8 原样保留）：解算出的相机用 Blender 自己的 world_to_camera_view 复核。
@@ -568,6 +569,27 @@ def _st_phase_lock(lock_dir, lines4, r4, a, res, samples, outdir, sc, _Kapi, _ch
          % (r7.get("ok"), r7.get("current_holder"), r7.get("holder_ttl_remaining_s"),
             _eng0, _eng1, _ee0, _ee1, _cy0, _cy1, _j(_pre)))
     _lk(action="release", holder="selftest-HOLD")
+
+    # ---- H1-H3（v2.6.3 issue #48，移植）：engine="auto" 的软件光栅判定与选引擎
+    # 现场：容器里没 /dev/dri ⇒ 只能 llvmpipe 软件光栅 ⇒ EEVEE 慢 12 倍（320×180：34.36 s vs 2.76 s）
+    #      ⇒ shots 整批撞 timeout、零产出。auto 必须在这种环境选 WORKBENCH，并把判据写进回执。
+    _soft, _soft_why = _software_gl()
+    _chk("H1 auto 引擎的软件光栅判据自洽（给出 bool + 非空原因）",
+         isinstance(_soft, bool) and isinstance(_soft_why, str) and len(_soft_why) > 4,
+         "soft=%s why=%s" % (_soft, _soft_why))
+    _eng_before_auto = str(sc.render.engine)
+    _b2, _a2 = _set_engine("auto")
+    _chk("H2 auto 在软件光栅环境选 WORKBENCH（否则保持原引擎）",
+         (_a2 == "BLENDER_WORKBENCH") if _soft else (_a2 == _eng_before_auto),
+         "before=%s after=%s soft=%s why=%s" % (_eng_before_auto, _a2, _soft, _soft_why))
+    _b3, _a3 = _set_engine("keep")
+    _keep_now = str(sc.render.engine)
+    sc.render.engine = _eng_before_auto
+    _chk("H3 keep 不改引擎（auto 分支没污染既有语义）",
+         _a3 == _b3 and _keep_now == _b3,
+         "before_keep=%s after_keep=%s（keep 前后必须一致；auto 那步已把场景切到 %s，测完已还原为 %s）"
+         % (_b3, _a3, _keep_now, _eng_before_auto))
+
     return {"g1b": g1b, "g3": g3}
 
 def _st_cleanup(made_objs, made_meshes, made_mats, outdir, snap0):
@@ -718,6 +740,10 @@ def qc_render_selftest(args=None):
       G4 E1：jsonl 每行都有 lock{holder, waited_ms, acquired, stale_broken, path}（自动锁写进了产物）
       G5 E1：engine 路由拼写（lock / render_lock / status / render_status）都能 dispatch 且仍返回 str
       G6 E1 回归：拿不到锁 → 空产出 ok:false，且引擎/采样已写回（早退路径不污染场景）
+      —— v2.6.3（issue #48）新增 ——
+      H1 auto 引擎的软件光栅判据自洽（bool + 非空原因）
+      H2 auto 在软件光栅环境选 WORKBENCH（否则保持原引擎）
+      H3 keep 不改引擎（auto 分支没污染既有语义）
     """
     a = _unpack_args(args)
     assertions = []
