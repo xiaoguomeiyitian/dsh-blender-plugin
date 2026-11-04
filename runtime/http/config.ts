@@ -4,7 +4,10 @@ import { parsePortArg } from '../ports.js'
 
 const argv = process.argv.slice(2)
 export const PORT = parsePortArg(argv) ?? Number(process.env.VIEWPORT_PORT || CFG.httpPort)
-export const HOST = '127.0.0.1'
+// fork delta ①（跨容器回访）：不能写死 127.0.0.1 —— blender 容器里的 addon 要经
+// DSH_BLENDER_BACKEND_URL 回访（选中/集合下发），后端必须对容器网络可见。
+// 同机拓扑不设该变量 ⇒ 行为与上游一致（仍是 loopback）。
+export const HOST = process.env.DSH_BLENDER_HTTP_HOST || '127.0.0.1'
 
 export interface HttpStats {
   [k: string]: unknown
