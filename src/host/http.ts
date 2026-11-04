@@ -22,7 +22,7 @@ export async function backendJson(
   init?: RequestInit,
 ): Promise<Record<string, unknown>> {
   // fork delta ③：实例模式下，出口即路由 —— 打到本会话的实例，而不是旧单例。
-  const t = await routeTarget(true)
+  const t = await routeTarget(true, port)
   const r = await withTimeout(base(t.port) + path, init, timeoutMs)
   const body = await r.text()
   try {
@@ -115,7 +115,7 @@ export async function backendPost(
   const signal = ext ? AbortSignal.any([ext, ac.signal]) : ac.signal
   // fork delta ③：实例模式下，出口即路由；holder 换成**实例身份**
   // （inst-<instanceId>）⇒ 会话之间的写租约真正隔离（A 写时只会被 A 自己的实例挡住）。
-  const t = await routeTarget(true)
+  const t = await routeTarget(true, port)
   try {
     const r = await fetch(base(t.port) + path, {
       method: 'POST',
@@ -209,7 +209,7 @@ export async function fetchFrame(
 ): Promise<FrameResult> {
   const t0 = Date.now()
   // fork delta ③：出口即路由（本会话实例）
-  const t = await routeTarget(true)
+  const t = await routeTarget(true, port)
   const url =
     base(t.port) + '/frame.png?' + (full ? 'full=1&area=' + String(area) : 'size=' + String(size))
   const r = await withTimeout(url, {}, 60000)
@@ -230,7 +230,7 @@ export async function fetchView(
 ): Promise<ViewResult> {
   const t0 = Date.now()
   // fork delta ③：出口即路由（本会话实例）
-  const t = await routeTarget(true)
+  const t = await routeTarget(true, port)
   const r = await withTimeout(
     base(t.port) + '/view',
     {

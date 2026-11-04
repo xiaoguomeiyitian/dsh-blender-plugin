@@ -145,7 +145,11 @@ async function ensureManager(): Promise<boolean> {
 }
 
 /** 本会话自己的实例（ensure=true 时惰性创建） */
-async function routeOwnInstance(key: string, ensure: boolean): Promise<RouteTarget> {
+async function routeOwnInstance(
+  key: string,
+  ensure: boolean,
+  back: number,
+): Promise<RouteTarget> {
   const r0 = await managerFetch('/instances', { sessionId: key, ensure })
   let inst = isRecord(r0.instance) ? r0.instance : null
   if (!inst) {
@@ -158,7 +162,7 @@ async function routeOwnInstance(key: string, ensure: boolean): Promise<RouteTarg
         '实例管理器不可用或建实例失败：' +
         String((r1 && (r1.error || 'no instance')) || 'unknown')
       return {
-        port: legacyPort(),
+        port: back,
         holder: HOLDER,
         instanceId: null,
         routed: false,
@@ -179,19 +183,25 @@ async function routeOwnInstance(key: string, ensure: boolean): Promise<RouteTarg
 /**
  * 解析本次调用该打哪个后端。
  * @param ensure true=没有就建一个（惰性启动）；false=只查不建
+ * @param fallbackPort 单例回退端口。**必须由调用方（出口）传入本次上下文的 port** —— 
+ *   模块级的 LEGACY_PORT 会被任何一次 apply() 改写（测试里" backend 不可达"用例就会
+ *   用封闭端口 apply 一次），拿它当权威端口会把后续所有出口打到那个已关闭的端口上。
  *
  * 显式 `instance` 参数的语义（2026-10-26 修正，v2.6.2 实测教训）：**这是"要跟哪个实例
  * 说话"，不是"再造一个会话"**。旧实现把它当成会话键去 ensure ⇒ 传一个没见过的值就会
  * **静默开一个新容器**（一个会话开出两个 Blender 容器，白吃 570MB 内存）。现在：按
  * **实例 ID** 定位；找不到就**回落本会话自己的实例**，绝不凭空多开容器。
  */
-export async function routeTarget(ensure = true): Promise<RouteTarget> {
-  if (!INSTANCE_MODE) return { port: legacyPort(), holder: HOLDER, instanceId: null, routed: false }
+export async function routeTarget(ensure = true, fallbackPort?: number): Promise<RouteTarget> {
+  const back = fallbackPort !== undefined ? fallbackPort : legacyPort()
+  if (!INSTANCE_MODE) {
+    return { port: back, holder: HOLDER, instanceId: null, routed: false }
+  }
   const key = routeKey()
   if (!key) {
     LAST_ROUTE_ERROR = '本次调用取不到会话身份（exec.agent.id 为空）'
     return {
-      port: legacyPort(),
+      port: back,
       holder: HOLDER,
       instanceId: null,
       routed: false,
@@ -212,14 +222,14 @@ export async function routeTarget(ensure = true): Promise<RouteTarget> {
       }
     }
     // 没找到 ⇒ 继续按本会话路由（ensure 时建本会话的实例），并在回执里说明回落
-    const own = await routeOwnInstance(key, ensure)
+    const own = await routeOwnInstance(key, ensure, back)
     if (own.routed) {
       own.note = '指定的实例 ' + explicit + ' 不存在，已改用本会话实例 ' + String(own.instanceId)
       LAST_ROUTE_ERROR = own.note
     }
     return own
   }
-  return await routeOwnInstance(key, ensure)
+  return await routeOwnInstance(key, ensure, back)
 }
 
 /** 路由说明（一行；给回执/日志用） */

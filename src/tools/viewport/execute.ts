@@ -35,7 +35,7 @@ export async function executeViewport(
   port: number,
 ): Promise<string> {
   const op = text(args.op) || 'status'
-  if (op === 'instance') return opInstance(args)
+  if (op === 'instance') return opInstance(args, port)
   if (op === 'start') return opStart(port)
   if (op === 'restart') return opRestart(port)
   if (op === 'stop') return opStop(port)
@@ -50,11 +50,9 @@ export async function executeViewport(
  * 实例模式下，"后端"不再是全局单例，而是**本会话的实例**（容器+后端+工作目录+端口）。
  * 这里给出实例的可见面：status / claim（建一个）/ list（看全部）/ release（删本会话）/ reap。
  */
-async function opInstance(args: Record<string, unknown>): Promise<string> {
+async function opInstance(args: Record<string, unknown>, port: number): Promise<string> {
   const action = text(args.action) || 'status'
   const key = execSessionId()
-  const mgr = '实例管理器 ' + managerUrl()
-  const why = lastRouteError() ? ' · 原因：' + lastRouteError() : ''
   if (!isInstanceMode()) {
     return (
       '当前是**单例模式**（instanceMode=false）：没有会话级实例，工具仍打旧单例。\n' +
@@ -62,99 +60,125 @@ async function opInstance(args: Record<string, unknown>): Promise<string> {
     )
   }
   if (!key) return '取不到会话身份（exec.agent.id 为空）⇒ 无法定位实例。'
-  if (action === 'list') {
-    const r = await managerFetch('/instances')
-    const list = asArray(r.instances)
-    if (!list.length) return mgr + '：当前没有实例。'
-    return (
-      mgr +
-      '（共 ' +
-      String(list.length) +
-      ' 个）：\n' +
-      list
-        .map((i) => {
-          const it = asRecord(i)
-          const age = Math.round((Date.now() - Number(it.createdAt || 0)) / 1000)
-          const idle = Math.round((Date.now() - Number(it.lastUsedAt || 0)) / 1000)
-          return (
-            '· ' +
-            text(it.id) +
-            '  会话=' +
-            text(it.sessionId || '-') +
-            '  端口=' +
-            text(it.port) +
-            '  容器=' +
-            text(it.container) +
-            '  状态=' +
-            text(it.state) +
-            '  存活=' +
-            String(age) +
-            's  空闲=' +
-            String(idle) +
-            's'
-          )
-        })
-        .join('\n')
-    )
-  }
-  if (action === 'reap') {
-    const r = await managerFetch('/instances/reap', {})
-    return (
-      mgr +
-      ' reap：' +
-      JSON.stringify(asArray(r.removed)) +
-      (r && r.ok ? '' : '（失败：' + String(r && r.error) + '）')
-    )
-  }
-  if (action === 'release') {
-    const targetId = text(args.instance_id) || text(args.instance)
-    let id = targetId
-    if (!id) {
-      const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
-      const inst = isRecord(r.instance) ? r.instance : null
-      id = inst ? text(inst.id) : ''
-    }
-    if (!id) return '本会话没有实例（key=' + key + '）⇒ 无需释放。'
-    const r = await managerFetch('/instances/' + encodeURIComponent(id) + '/release', {})
-    return '已释放实例 ' + id + '（容器已删、后端已停；产物目录保留 7 天）：' + JSON.stringify(r)
-  }
-  if (action === 'claim') {
-    // 显式给了 instance ⇒ 按 ID 取（**不新建**）；没给 ⇒ 领本会话的实例
-    const explicit = text(args.instance)
-    const r = explicit
-      ? await managerFetch('/instances?id=' + encodeURIComponent(explicit))
-      : await managerFetch('/instances', { sessionId: key, ensure: true })
+  if (action === 'list') return instanceList()
+  if (action === 'reap') return instanceReap()
+  if (action === 'release') return instanceRelease(args, key)
+  if (action === 'claim') return instanceClaim(args, key)
+  return instanceStatus(args, key, port)
+}
+
+/** 全部实例（管理员视角；不是管理通道时看不到别人的会话键） */
+async function instanceList(): Promise<string> {
+  const r = await managerFetch('/instances')
+  const list = asArray(r.instances)
+  const mgr = '实例管理器 ' + managerUrl()
+  if (!list.length) return mgr + '：当前没有实例。'
+  return (
+    mgr +
+    '（共 ' +
+    String(list.length) +
+    ' 个）：\n' +
+    list
+      .map((i) => {
+        const it = asRecord(i)
+        const age = Math.round((Date.now() - Number(it.createdAt || 0)) / 1000)
+        const idle = Math.round((Date.now() - Number(it.lastUsedAt || 0)) / 1000)
+        return (
+          '· ' +
+          text(it.id) +
+          '  会话=' +
+          text(it.sessionId || '-') +
+          '  端口=' +
+          text(it.port) +
+          '  容器=' +
+          text(it.container) +
+          '  状态=' +
+          text(it.state) +
+          '  存活=' +
+          String(age) +
+          's  空闲=' +
+          String(idle) +
+          's'
+        )
+      })
+      .join('\n')
+  )
+}
+
+/** 立即回收空闲实例（清僵尸/腾内存的人工按钮） */
+async function instanceReap(): Promise<string> {
+  const r = await managerFetch('/instances/reap', {})
+  return (
+    '实例管理器 ' +
+    managerUrl() +
+    ' reap：' +
+    JSON.stringify(asArray(r.removed)) +
+    (r && r.ok ? '' : '（失败：' + String(r && r.error) + '）')
+  )
+}
+
+/** 释放实例：显式给了 id 就放它，否则放本会话的（容器即删，产物保留） */
+async function instanceRelease(args: Record<string, unknown>, key: string): Promise<string> {
+  let id = text(args.instance_id) || text(args.instance)
+  if (!id) {
+    const r = await managerFetch('/instances?session=' + encodeURIComponent(key))
     const inst = isRecord(r.instance) ? r.instance : null
-    if (!inst) {
-      return explicit
-        ? '找不到实例 ' +
-            explicit +
-            '（不会替你新建一个；先 op="instance" action="list" 看现有实例）'
-        : '建实例失败：' + String((r && r.error) || 'unknown') + why
-    }
-    return (
-      '已分配实例：' +
-      text(inst.id) +
-      '\n端口=' +
-      text(inst.port) +
-      '  容器=' +
-      text(inst.container) +
-      '\n工作目录=' +
-      text(inst.workDir) +
-      '\n会话键=' +
-      key +
-      (r.created ? '（新建）' : '（复用）')
-    )
+    id = inst ? text(inst.id) : ''
   }
-  // status（默认）：只查不建（status 不该有副作用）
+  if (!id) return '本会话没有实例（key=' + key + '）⇒ 无需释放。'
+  const r = await managerFetch('/instances/' + encodeURIComponent(id) + '/release', {})
+  return '已释放实例 ' + id + '（容器已删、后端已停；产物目录保留 7 天）：' + JSON.stringify(r)
+}
+
+/**
+ * 领取实例。显式给了 instance ⇒ 按 ID 取（**不新建**：找不到就报错并提示先 list）；
+ * 没给 ⇒ 领本会话的实例（ensure=true 惰性建）。
+ */
+async function instanceClaim(args: Record<string, unknown>, key: string): Promise<string> {
   const explicit = text(args.instance)
+  const why = lastRouteError() ? ' · 原因：' + lastRouteError() : ''
+  const r = explicit
+    ? await managerFetch('/instances?id=' + encodeURIComponent(explicit))
+    : await managerFetch('/instances', { sessionId: key, ensure: true })
+  const inst = isRecord(r.instance) ? r.instance : null
+  if (!inst) {
+    return explicit
+      ? '找不到实例 ' +
+          explicit +
+          '（不会替你新建一个；先 op="instance" action="list" 看现有实例）'
+      : '建实例失败：' + String((r && r.error) || 'unknown') + why
+  }
+  return (
+    '已分配实例：' +
+    text(inst.id) +
+    '\n端口=' +
+    text(inst.port) +
+    '  容器=' +
+    text(inst.container) +
+    '\n工作目录=' +
+    text(inst.workDir) +
+    '\n会话键=' +
+    key +
+    (r.created ? '（新建）' : '（复用）')
+  )
+}
+
+/** 只看本会话的实例（只查不建 —— status 不该有副作用） */
+async function instanceStatus(
+  args: Record<string, unknown>,
+  key: string,
+  port: number,
+): Promise<string> {
+  const explicit = text(args.instance)
+  const why = lastRouteError() ? ' · 原因：' + lastRouteError() : ''
   const r = explicit
     ? await managerFetch('/instances?id=' + encodeURIComponent(explicit))
     : await managerFetch('/instances?session=' + encodeURIComponent(key))
   const inst = isRecord(r.instance) ? r.instance : null
-  const t = await routeTarget(false)
+  const t = await routeTarget(false, port)
   return (
-    mgr +
+    '实例管理器 ' +
+    managerUrl() +
     '\n会话键=' +
     key +
     '\n本会话实例=' +
@@ -178,7 +202,7 @@ async function opStart(port: number): Promise<string> {
   setPaused(false)
   // 实例模式："启动" = 惰性建本会话实例
   if (isInstanceMode()) {
-    const t = await routeTarget(true)
+    const t = await routeTarget(true, port)
     return t.routed
       ? '实例已就绪：' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）'
       : '建实例失败：' +
@@ -211,7 +235,7 @@ async function opRestart(port: number): Promise<string> {
     const old = isRecord(r0.instance) ? r0.instance : null
     if (old && old.id)
       await managerFetch('/instances/' + encodeURIComponent(text(old.id)) + '/release', {})
-    const t = await routeTarget(true)
+    const t = await routeTarget(true, port)
     return t.routed
       ? '实例已重建：' +
           String(t.instanceId) +

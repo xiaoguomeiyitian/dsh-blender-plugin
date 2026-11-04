@@ -61,7 +61,7 @@ export async function probe(port: number, timeoutMs = 1500): Promise<boolean> {
 export async function ensureBackend(port: number): Promise<boolean> {
   // fork delta ③：实例模式下，"后端可用" = **本会话实例就绪**（惰性建容器 + 后端 + 等 doctor）
   if (isInstanceMode()) {
-    const t = await routeTarget(true)
+    const t = await routeTarget(true, port)
     return t.routed
   }
   if (await probe(port)) return true
@@ -90,7 +90,7 @@ export async function ensureBackend(port: number): Promise<boolean> {
 export async function startBackend(port: number): Promise<string> {
   // fork delta ③：实例模式下由**管理器**拉容器与后端（插件不直接 spawn）
   if (isInstanceMode()) {
-    const t = await routeTarget(true)
+    const t = await routeTarget(true, port)
     return t.routed
       ? 'instance-ready ' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）'
       : 'instance-failed: ' + String(t.error || 'unknown')
