@@ -7,6 +7,7 @@ import { detectFileAlias } from '../../host/runtime-bridge.js'
 import { toolError } from '../errors.js'
 import { asRecord } from '../../contracts/dynamic.js'
 import { attachShots, missingResultText, runAsJob, syncReceipt } from './receipt.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 
 export async function executeHeadless(
   args: Record<string, unknown>,
@@ -16,7 +17,7 @@ export async function executeHeadless(
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       '无头通道由后端进程代管，先 blender_viewport op=start',
     )
   const bad = validateFileArgs(args)

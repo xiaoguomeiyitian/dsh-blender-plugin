@@ -4,12 +4,13 @@ import { backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { formatPreset } from './response.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 
 export async function executePreset(port: number, args: Record<string, unknown>): Promise<unknown> {
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       '先 blender_viewport op=start 拉起后端，再重试',
     )
   const op = text(args.op) || 'list'

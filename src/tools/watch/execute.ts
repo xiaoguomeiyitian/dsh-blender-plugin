@@ -6,6 +6,7 @@ import { backendPost, fetchFrame, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { guiWatchResponse, workerWatchResponse } from './response.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 
 export async function executeWatch(
   ctx: HostContext,
@@ -15,7 +16,7 @@ export async function executeWatch(
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       BACKEND_HINT,
     )
   const seconds = Math.max(0.2, Math.min(20, Number(args.seconds || 2)))

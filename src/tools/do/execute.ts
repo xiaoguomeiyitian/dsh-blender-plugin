@@ -8,6 +8,7 @@ import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { isHostAbort, toolError } from '../errors.js'
 import { formatActText, formatSessionExec, formatSessionSee } from './envelope.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 
 const LF = String.fromCharCode(10)
 
@@ -19,7 +20,7 @@ export async function executeDo(
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       BACKEND_HINT,
     )
   const code = String(args.code || '')

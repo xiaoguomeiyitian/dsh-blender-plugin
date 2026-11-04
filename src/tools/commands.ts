@@ -5,7 +5,7 @@ import { ensureBackend } from '../host/backend/index.js'
 import { backendJson } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
-import { instanceTimeout } from '../host/instance-route.js'
+import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
 import { asArray, asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
 
@@ -30,7 +30,7 @@ export function registerCommands(ctx: HostContext, port: number): void {
             if (!(await ensureBackend(port)))
               return toolError(
                 'backend_unreachable',
-                '后端不可用（127.0.0.1:' + String(port) + '）',
+                backendUnavailableText(port),
                 BACKEND_HINT,
               )
             const r = await backendJson(port, '/commands', 120000)

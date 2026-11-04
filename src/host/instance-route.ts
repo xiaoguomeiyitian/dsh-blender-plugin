@@ -77,6 +77,20 @@ export function lastRouteError(): string {
   return LAST_ROUTE_ERROR
 }
 
+/**
+ * 后端不可用时的统一文案（移植 v2.6.3 · issue #49）—— **必须带上路由失败的原因**。
+ *
+ * 现场（2026-10-31 真机）：实例刚被空闲回收 ⇒ 管理器建新实例时因"宿主可用内存不足"失败
+ * ⇒ 旧文案只说"后端不可用（127.0.0.1:9877）"，把管理器那句清楚的错误
+ * （"剩 642MB < 需要的 700MB"）整个吞掉 ⇒ 用户只能猜、只能靠重试碰运气。
+ * ⇒ 现在把 LAST_ROUTE_ERROR（管理器原话）带出来。hint 仍由各工具走 toolError 的
+ * next_action（v3 的信封契约），所以这里只管"消息 + 原因"。
+ */
+export function backendUnavailableText(port: number): string {
+  const why = LAST_ROUTE_ERROR ? ' · 原因：' + LAST_ROUTE_ERROR : ''
+  return '后端不可用（127.0.0.1:' + String(port) + '）' + why
+}
+
 /** 本会话自己的实例键（宿主 ToolExecution：agent.id = SessionId） */
 function routeKey(): string {
   return execSessionId()

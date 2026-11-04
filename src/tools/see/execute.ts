@@ -1,5 +1,6 @@
 /** blender_rt_see 执行层：GUI 帧 / 自定义视角 / 无头 worker 三条通道（行为与 v2.6.2 一致）。 */
 import type { HostContext } from '../../host/context.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
 import { backendPost, fetchFrame, fetchView, numTriple } from '../../host/http.js'
@@ -22,7 +23,7 @@ export async function executeSee(
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       BACKEND_HINT,
     )
   const size = Math.max(120, Math.min(1600, Number(args.max_size || 560)))

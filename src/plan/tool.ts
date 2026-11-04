@@ -8,7 +8,7 @@ import { finishPlanResponse, planViaWorker } from './headless-target.js'
 import { toolError } from '../tools/errors.js'
 import { asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
-import { instanceTimeout } from '../host/instance-route.js'
+import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
 
 export function registerPlan(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -58,7 +58,7 @@ export function registerPlan(ctx: HostContext, port: number): void {
             if (!(await ensureBackend(port)))
               return toolError(
                 'backend_unreachable',
-                '后端不可用（127.0.0.1:' + String(port) + '）',
+                backendUnavailableText(port),
                 BACKEND_HINT,
               )
             const op = text(argsIn.op) || 'status'

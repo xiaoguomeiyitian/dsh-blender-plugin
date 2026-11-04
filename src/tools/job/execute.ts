@@ -1,5 +1,6 @@
 /** blender_rt_job 执行层：参数校验 → 后端调用 → 回执装配（行为与 v2.6.2 一致）。 */
 import { ensureBackend } from '../../host/backend/index.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 import { backendPost, leasedText, splitArgs } from '../../host/http.js'
 import { detectFileAlias } from '../../host/runtime-bridge.js'
 import { toolError } from '../errors.js'
@@ -27,7 +28,7 @@ export async function executeJob(args: Record<string, unknown>, port: number): P
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       '先 blender_viewport op=start 拉起后端，再重试',
     )
   const op = text(args.op) || 'list'

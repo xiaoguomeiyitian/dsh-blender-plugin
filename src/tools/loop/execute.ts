@@ -5,12 +5,13 @@ import { backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { loopResultText, loopSessionError, loopSessionText } from './response.js'
+import { backendUnavailableText } from '../../host/instance-route.js'
 
 export async function executeLoop(port: number, args: Record<string, unknown>): Promise<unknown> {
   if (!(await ensureBackend(port)))
     return toolError(
       'backend_unreachable',
-      '后端不可用（127.0.0.1:' + String(port) + '）',
+      backendUnavailableText(port),
       BACKEND_HINT,
     )
   const op = text(args.op) || 'status'

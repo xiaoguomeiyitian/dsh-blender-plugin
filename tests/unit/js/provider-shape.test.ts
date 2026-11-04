@@ -60,6 +60,41 @@ describe('montage kwargs mapping (issue #47 ②)', () => {
   })
 })
 
+describe('backend-unavailable text carries the routing reason (issue #49)', () => {
+  it('defines a shared helper in the host route layer', () => {
+    const root = process.cwd()
+    const src = readFileSync(path.join(root, 'src/host/instance-route.ts'), 'utf8')
+    expect(src).toContain('export function backendUnavailableText')
+    // 路由失败原因必须出现在文案里，不能被静默吞掉
+    expect(src).toMatch(/· 原因：/)
+  })
+
+  it('every tool site uses the helper instead of a bare message', () => {
+    const root = process.cwd()
+    const sites = [
+      'src/plan/tool.ts',
+      'src/tools/cmd.ts',
+      'src/tools/commands.ts',
+      'src/tools/do/execute.ts',
+      'src/tools/headless/execute.ts',
+      'src/tools/job/execute.ts',
+      'src/tools/loop/execute.ts',
+      'src/tools/opt.ts',
+      'src/tools/perf.ts',
+      'src/tools/preset/execute.ts',
+      'src/tools/see/execute.ts',
+      'src/tools/txn/execute.ts',
+      'src/tools/watch/execute.ts',
+      'src/tools/worker/execute.ts',
+    ]
+    for (const rel of sites) {
+      const src = readFileSync(path.join(root, rel), 'utf8')
+      expect(src, rel).toContain('backendUnavailableText(port)')
+      expect(src, rel).not.toContain("'后端不可用（127.0.0.1:' + String(port) + '）'")
+    }
+  })
+})
+
 describe('shots defaults survive software GL (issue #48)', () => {
   it('picks auto engine, a sane resolution and a degradation ladder', () => {
     expect(SHOTS_DEFAULTS.engine).toBe('auto')
