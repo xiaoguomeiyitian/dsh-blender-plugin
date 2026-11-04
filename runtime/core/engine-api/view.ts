@@ -1,13 +1,13 @@
 // engine API：自定义视角捕获（F1.1 从 server-compat.ts 拆出）
-import fs from 'node:fs'
-import { winToWsl } from '../../config.js'
 import { VIEW_PNG_WIN } from '../../paths.js'
 import { extractTag } from '../output/index.js'
 import { KERNEL_BOOTSTRAP } from '../kernel/index.js'
+import { createAddonFileReader } from './addon-file.js'
 import type { EngineApiDeps } from './index.js'
 
 export function createViewApi(E: EngineApiDeps) {
   const { addon, ensureView, metrics } = E
+  const { readAddonFile } = createAddonFileReader({ addon })
   return {
     async view(spec: Record<string, unknown> = {}) {
       await ensureView()
@@ -33,7 +33,8 @@ export function createViewApi(E: EngineApiDeps) {
       if (!info || info.ok === false)
         throw new Error('view 失败: ' + JSON.stringify(info).slice(0, 300))
       metrics.lastView = { at: Date.now(), ms: info.ms, mode: info.mode, path: info.path }
-      return { png: fs.readFileSync(winToWsl(info.path)), meta: info }
+      // fork delta ②：本地读到就用；ENOENT（跨容器两侧文件系统不同）时改走 socket base64 回传
+      return { png: await readAddonFile(String(info.path)), meta: info }
     },
     /**
      * 宿主集成（/host/view/capture，契约 §1.4）：抓**当前 GUI 视口**那一帧。

@@ -1,11 +1,12 @@
 // engine API：截图/渲染性能/对象精简（F1.1 从 server-compat.ts 拆出）
-import fs from 'node:fs'
-import { LIVE_PNG_WIN, LIVE_PNG_WSL } from '../../paths.js'
+import { LIVE_PNG_WIN } from '../../paths.js'
 import { KERNEL_BOOTSTRAP } from '../kernel/index.js'
+import { createAddonFileReader } from './addon-file.js'
 import type { EngineApiDeps } from './index.js'
 
 export function createFrameApi(E: EngineApiDeps) {
   const { addon } = E
+  const { readAddonFile } = createAddonFileReader({ addon })
   return {
     async frameArea(areaIndex = 0) {
       const code = [
@@ -24,7 +25,8 @@ export function createFrameApi(E: EngineApiDeps) {
       const outRec = (out || null) as Record<string, unknown> | null
       const txt = outRec && typeof outRec.result === 'string' ? outRec.result : ''
       if (!txt.includes('AREA_SHOT')) throw new Error('区域截图失败: ' + txt.slice(0, 200))
-      const png = fs.readFileSync(LIVE_PNG_WSL)
+      // fork delta ②：本地读到就用；ENOENT（跨容器两侧文件系统不同）时改走 socket base64 回传
+      const png = await readAddonFile(LIVE_PNG_WIN)
       return { png: png, meta: { method: 'screenshot_area', info: txt.trim() } }
     },
     /** 渲染性能：status / apply / revert / analyze / help */
@@ -44,7 +46,8 @@ export function createFrameApi(E: EngineApiDeps) {
       })
       const resRec = (res || null) as Record<string, unknown> | null
       if (resRec && resRec.error) throw new Error(String(resRec.error))
-      const png = fs.readFileSync(LIVE_PNG_WSL)
+      // fork delta ②：本地读到就用；ENOENT（跨容器两侧文件系统不同）时改走 socket base64 回传
+      const png = await readAddonFile(LIVE_PNG_WIN)
       return { png: png, meta: res }
     },
     /** 自定义视角捕获：from/look_at/lens/ortho/...（view.py）——不动物体、不动用户视口 */
