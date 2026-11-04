@@ -5,6 +5,7 @@ import { ANY_SCHEMA, HINT_KERNEL } from '../schema-diagnostic.js'
 import { T } from '../../constants.js'
 import { renderOne } from '../../ui/cards.js'
 import { executeDo } from './execute.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 function buildDoTool(ctx: HostContext, port: number) {
   return vTool({
@@ -14,12 +15,13 @@ function buildDoTool(ctx: HostContext, port: number) {
       'GUI 可用时走 addon；传 session 时在持久无头 worker 里 exec+see（GUI 不可达自动降级，不是异步 job）；每步约 50–150 ms。' +
       HINT_KERNEL +
       ' 异常也会回传 partial stdout / stderr / traceback（诊断信息不丢）；' +
-      ' file 参数可直接执行工作区脚本（等价 K.run(path)，支持 WSL / Windows / 相对 .blend 三种路径）；' +
+      ' file 参数可跑工作区脚本（等价 K.run(path)）；' +
       ' 内置路径辅助 K.win_path / K.wsl_path / K.blend_path / K.out_dir；' +
-      ' ④ 返回的 ms 即**主线程占用**，>1 s 会提示改走 blender_rt_headless / blender_rt_worker。' +
-      ' **P0 无头交互**：GUI 不在线或传 session 时，自动降级到持久无头会话（exec + Workbench see，同一 worker 热路径；不是 job/异步）。' +
-      '第一次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个 Blender 会话。',
+      ' ④ ms 即主线程占用，>1 s 提示改走 rt_headless / rt_worker。' +
+      ' GUI 不在线时自动降级持久无头会话（exec + Workbench see；不是 job/异步）。' +
+      '首次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个会话。',
     parameters: {
+      instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
       code: {
         type: 'string',
         description:
@@ -44,7 +46,7 @@ function buildDoTool(ctx: HostContext, port: number) {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.act,
+    timeoutMs: instanceTimeout(T.act),
     async execute(args: Record<string, unknown>) {
       return executeDo(args, ctx, port)
     },

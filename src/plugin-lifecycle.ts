@@ -9,11 +9,16 @@ import {
   startBackend,
 } from './host/backend/index.js'
 import { backendPost } from './host/http.js'
+import { isInstanceMode } from './host/instance-route.js'
 import type { HostContext } from './host/context.js'
 
 export function registerLifecycle(ctx: HostContext, port: number, autoStart: boolean): void {
+  // fork delta ③：实例模式下没有"旧单例后端"可拉/可看护（管理器自己管实例）——
+  // 否则会养出一个没人用的常驻容器。
+  const instanceMode = isInstanceMode()
+
   void (async () => {
-    if (autoStart && !isPaused()) await ensureBackend(port)
+    if (autoStart && !isPaused() && !instanceMode) await ensureBackend(port)
   })()
 
   // 常驻看护：每 15s 探活一次，掉线自动拉起（宿主重启 / 进程被杀 / 端口被回收都能自愈）。
@@ -24,6 +29,7 @@ export function registerLifecycle(ctx: HostContext, port: number, autoStart: boo
   //   失败才认定卡死，避免把"只是忙"的后端杀掉。
   let probeMisses = 0
   ctx.effect(() => {
+    if (instanceMode) return () => {} // 实例模式下管理器自己管实例生命周期，没有旧单例可看护
     const wd = setInterval(() => {
       void (async () => {
         try {

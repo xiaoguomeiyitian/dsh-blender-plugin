@@ -7,6 +7,7 @@ import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
+import { instanceTimeout } from '../host/instance-route.js'
 
 export function registerOpt(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -17,6 +18,7 @@ export function registerOpt(ctx: HostContext, port: number): void {
           description:
             '【对象精简】降 Cycles 每轮场景同步成本（实测 ≈1.4 ms/对象）。op=analyze 列出可安全合并的分组与预计节省；op=join 执行合并（**默认 dry_run=true 只报告**；dry_run=false 才真合并，强烈建议同时给 save_before=<.blend 绝对路径> 先存回退点）。合并规则：同集合 / 同材质 / 同父级 / 无修改器 / 无动画 / 无形态键 / 无自定义属性 / 无实例 / 非库链接。合并后**几何零损失**（面数与顶点数不变），合并对象名为 `<前缀>_MERGED_<材质>`。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             op: { type: 'string', required: true, description: 'analyze | join | help' },
             args: {
               type: 'json',
@@ -25,7 +27,7 @@ export function registerOpt(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.opt,
+          timeoutMs: instanceTimeout(T.opt),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
               return toolError(

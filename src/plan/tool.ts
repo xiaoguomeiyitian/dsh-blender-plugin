@@ -8,6 +8,7 @@ import { finishPlanResponse, planViaWorker } from './headless-target.js'
 import { toolError } from '../tools/errors.js'
 import { asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
+import { instanceTimeout } from '../host/instance-route.js'
 
 export function registerPlan(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -21,16 +22,15 @@ export function registerPlan(ctx: HostContext, port: number): void {
             '] 【判定 / 验收 / 导出 / 造型】34 个 family · 228 个 op；有 op 不许自写等价几何/验收。' +
             '**不确定用哪个就先问目录：op="catalog"**（本地直出，不占 Blender 往返；含"什么时候用 / 别用 / 最小骨架"）；' +
             '单族展开 op="catalog", args={family:"audit"}；算子细节用各 family 自己的 <family>_help。' +
-            '常用：audit_* · qc_render_views|qc_compare · sculpt_* · fix_* · uv_* · print_report · sweep_* · ' +
-            'deliver_* · motion_* · generator_save|run（save 用 **code=**）· material_* · render_lock|render_status · render_state|render_wait · ' +
-            'asm_*（装配扫描/manifest/merge/gate）· blockout_* · img_digest|probe|measure|calib · ' +
-            'gate_preflight|checkpoint|deliver · ' +
-            'visualreport_report · shapesolve_solve · surface_loft|sweep|patch|validate。' +
+            '常用：audit_* · qc_render_views · sculpt_* · fix_* · uv_* · print_report · sweep_* · deliver_* · motion_* · ' +
+            'generator_save|run（save 用 **code=**）· material_* · render_lock|status · render_state|wait · asm_* · blockout_* · ' +
+            'img_digest|probe|measure|calib · gate_* · visualreport_report · shapesolve_solve · surface_loft|sweep|patch|validate。' +
             '契约层判据见 docs/假设驱动建模-cookbook.md；写 op 过租约，只读 op 豁免。' +
-            '传 session="auto" 或无头 worker 名时按 family 自动起 worker 同步执行（不依赖 GUI）；首次约 2 s，之后复用。' +
+            '传 session="auto" 或无头 worker 名时按 family 自动起 worker 同步执行；首次约 2 s，之后复用。' +
             'op 名拼错回 did_you_mean（带骨架）；参数名写错回"不认识的参数"。',
 
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             op: {
               type: 'string',
               required: true,
@@ -53,7 +53,7 @@ export function registerPlan(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderStructured },
           isConcurrencySafe: () => false,
-          timeoutMs: T.plan,
+          timeoutMs: instanceTimeout(T.plan),
           async execute(argsIn: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
               return toolError(

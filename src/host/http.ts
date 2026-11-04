@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { ABORT_HINT, HOLDER } from '../constants.js'
+import { ABORT_HINT } from '../constants.js'
 import { execSignal } from './exec-context.js'
+import { routeTarget } from './instance-route.js'
 import { base, withTimeout } from './backend/index.js'
 import { asRecord, isRecord, text } from '../contracts/dynamic.js'
 
@@ -20,7 +21,9 @@ export async function backendJson(
   timeoutMs = 20000,
   init?: RequestInit,
 ): Promise<Record<string, unknown>> {
-  const r = await withTimeout(base(port) + path, init, timeoutMs)
+  // fork delta ③：实例模式下，出口即路由 —— 打到本会话的实例，而不是旧单例。
+  const t = await routeTarget(true)
+  const r = await withTimeout(base(t.port) + path, init, timeoutMs)
   const body = await r.text()
   try {
     const parsed: unknown = JSON.parse(body)
@@ -110,11 +113,14 @@ export async function backendPost(
     ac.abort()
   }, timeoutMs)
   const signal = ext ? AbortSignal.any([ext, ac.signal]) : ac.signal
+  // fork delta ③：实例模式下，出口即路由；holder 换成**实例身份**
+  // （inst-<instanceId>）⇒ 会话之间的写租约真正隔离（A 写时只会被 A 自己的实例挡住）。
+  const t = await routeTarget(true)
   try {
-    const r = await fetch(base(port) + path, {
+    const r = await fetch(base(t.port) + path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...asRecord(body), holder: HOLDER }),
+      body: JSON.stringify({ ...asRecord(body), holder: t.holder }),
       signal,
     })
     const bodyText = await r.text()
@@ -202,8 +208,10 @@ export async function fetchFrame(
   area = 0,
 ): Promise<FrameResult> {
   const t0 = Date.now()
+  // fork delta ③：出口即路由（本会话实例）
+  const t = await routeTarget(true)
   const url =
-    base(port) + '/frame.png?' + (full ? 'full=1&area=' + String(area) : 'size=' + String(size))
+    base(t.port) + '/frame.png?' + (full ? 'full=1&area=' + String(area) : 'size=' + String(size))
   const r = await withTimeout(url, {}, 60000)
   if (!r.ok) throw new Error('frame http ' + String(r.status))
   const buf = new Uint8Array(await r.arrayBuffer())
@@ -221,8 +229,10 @@ export async function fetchView(
   timeoutMs = 180000,
 ): Promise<ViewResult> {
   const t0 = Date.now()
+  // fork delta ③：出口即路由（本会话实例）
+  const t = await routeTarget(true)
   const r = await withTimeout(
-    base(port) + '/view',
+    base(t.port) + '/view',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -4,6 +4,7 @@ import { T } from '../../constants.js'
 import { renderOne } from '../../ui/cards.js'
 import type { HostContext } from '../../host/context.js'
 import { executeTxn } from './execute.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 export function registerTxn(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -12,11 +13,12 @@ export function registerTxn(ctx: HostContext, port: number): void {
         vTool({
           name: 'blender_rt_txn',
           description:
-            '【事务 / 回滚】两级快照：**文件级** snapshot/restore（整场景回退；写 .blend 副本，用 copy=True 所以不改当前 filepath；大场景有 MB 级成本，本机 300 对象工程实测约 97MB / 0.8s）+ **对象级** mark/revert（只记 transform / 材质槽 / 可见性 / 修改器开关，毫秒级、就地回滚）。' +
+            '【事务 / 回滚】两级快照：**文件级** snapshot/restore（整场景回退；写 .blend 副本不改 filepath；有 MB 级成本）+ **对象级** mark/revert（只记 transform / 材质槽 / 可见性 / 修改器开关，毫秒级、就地回滚）。' +
             '用途："整个场景推倒重来之前先留个点"（snapshot）、"只改一处再对比"（mark 再 revert）。' +
-            'restore 默认 into="auto"：载入快照后把会话放回**快照的出处文件**（保存落回自己的工程，不写进快照目录），并在载入前自动留 pre_restore 备份；into="snapshot" 非破坏（只看一眼、不写原文件）。' +
+            'restore 默认 into="auto"：把会话放回**快照的出处文件**，载入前自动留 pre_restore 备份。' +
             '⚠️ 边界：对象级**不含拓扑/UV/顶点级改动** —— Boolean、合并、删面之后回不去（revert 会跳过并报告），那种回滚请用文件级 snapshot/restore。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             op: {
               type: 'string',
               required: true,
@@ -39,7 +41,7 @@ export function registerTxn(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.txn,
+          timeoutMs: instanceTimeout(T.txn),
           async execute(args: Record<string, unknown>) {
             return executeTxn(port, args)
           },

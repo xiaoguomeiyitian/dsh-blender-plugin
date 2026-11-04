@@ -7,6 +7,7 @@ import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
+import { instanceTimeout } from '../host/instance-route.js'
 
 export function registerCmd(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -15,8 +16,9 @@ export function registerCmd(ctx: HostContext, port: number): void {
         vTool({
           name: 'blender_rt_cmd',
           description:
-            '直连调用 Blender addon 的任意命令（38 个名字：22 常驻 + 16 集成门控），含 get_world_state_snapshot / drain_human_activity / get_telemetry_consent / set_telemetry_consent / get_addon_info，以及资产类命令（PolyHaven / Sketchfab / Poly Pizza / Hyper3D / Hunyuan3D）。仅 GUI addon 在线时可用；纯无头请用 rt_worker / rt_headless。参数必须匹配 addon 真实签名：get_scene_info 无参、get_object_info 用 name（不是 object_name）。先用 blender_rt_commands 看清单与可用性。',
+            '直连调用 Blender addon 的任意命令（38 个名字：22 常驻 + 16 集成门控），含 get_world_state_snapshot / drain_human_activity 与资产类命令（PolyHaven / Sketchfab / Hyper3D 等）。仅 GUI addon 在线时可用；纯无头请用 rt_worker / rt_headless。参数必须匹配 addon 真实签名（get_scene_info 无参；get_object_info 用 name）。先用 rt_commands 看清单。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             name: {
               type: 'string',
               required: true,
@@ -30,7 +32,7 @@ export function registerCmd(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.cmd,
+          timeoutMs: instanceTimeout(T.cmd),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
               return toolError(

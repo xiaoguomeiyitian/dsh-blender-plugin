@@ -7,6 +7,7 @@ import { asRecord } from '../../contracts/dynamic.js'
 import { execSignal } from '../exec-context.js'
 import { decideStart, probeHttp } from '../runtime-bridge.js'
 import { childAlive, killStaleChild, spawnChild } from './spawn.js'
+import { isInstanceMode, routeTarget } from '../instance-route.js'
 
 export { childAlive, getChild, killChildHandle, spawnChild } from './spawn.js'
 export { killBackendByCmd } from './process-scan.js'
@@ -58,6 +59,11 @@ export async function probe(port: number, timeoutMs = 1500): Promise<boolean> {
 }
 
 export async function ensureBackend(port: number): Promise<boolean> {
+  // fork delta ③：实例模式下，"后端可用" = **本会话实例就绪**（惰性建容器 + 后端 + 等 doctor）
+  if (isInstanceMode()) {
+    const t = await routeTarget(true)
+    return t.routed
+  }
   if (await probe(port)) return true
   if (paused) return false
   // Test-only guard: contract tests exercise the unreachable-backend path on a
@@ -82,6 +88,13 @@ export async function ensureBackend(port: number): Promise<boolean> {
  * 现在：端口能服务 ⇒ already-running；端口不通但句柄在 ⇒ 判为陈旧句柄，SIGTERM 后重拉。
  */
 export async function startBackend(port: number): Promise<string> {
+  // fork delta ③：实例模式下由**管理器**拉容器与后端（插件不直接 spawn）
+  if (isInstanceMode()) {
+    const t = await routeTarget(true)
+    return t.routed
+      ? 'instance-ready ' + String(t.instanceId) + '（127.0.0.1:' + String(t.port) + '）'
+      : 'instance-failed: ' + String(t.error || 'unknown')
+  }
   const url = base(port) + '/health'
   const portUp = await probeHttp(url, 800)
   const decision = decideStart({ portUp, childAlive: childAlive() })

@@ -5,6 +5,7 @@ import { ensureBackend } from '../host/backend/index.js'
 import { backendJson } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
+import { instanceTimeout } from '../host/instance-route.js'
 import { asArray, asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
 
@@ -16,10 +17,15 @@ export function registerCommands(ctx: HostContext, port: number): void {
           name: 'blender_rt_commands',
           description:
             '列出直连通道当前可用的 addon 命令（19 常驻 + 15 集成门控）与 5 个集成的真实状态（开关是否打开、是否缺 API key）。调 blender_rt_cmd 之前先用它。',
-          parameters: {},
+          parameters: {
+            instance: {
+              type: 'string',
+              description: '实例 ID（默认本会话独占）',
+            },
+          },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => true,
-          timeoutMs: T.commands,
+          timeoutMs: instanceTimeout(T.commands),
           async execute() {
             if (!(await ensureBackend(port)))
               return toolError(

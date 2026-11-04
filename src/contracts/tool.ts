@@ -3,7 +3,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type zt from '@deepseek-ai/schemastery'
 import { PLUGIN_VERSION } from '../constants.js'
-import { EXEC_CTX } from '../host/exec-context.js'
+import { EXEC_CTX, type ExecContextStore } from '../host/exec-context.js'
 import { isRecord } from './dynamic.js'
 import { losslessSanitize } from './lossless.js'
 import { cardPresenters } from '../ui/cards.js'
@@ -31,7 +31,15 @@ export const vTool = (spec: DynamicToolSpec): ToolDefinition => {
     // 一个字段写错（NaN / undefined / -0）不该让整条工具通道变成不可用。
     execute: async (args: unknown, exec: unknown) => {
       const signal = isRecord(exec) && exec.signal instanceof AbortSignal ? exec.signal : undefined
-      const raw = await EXEC_CTX.run({ signal }, () =>
+      // fork delta ③：把宿主的 exec 关键面（signal / agent / arguments）整份放进
+      // AsyncLocalStorage —— 实例路由按 agent.id 分配会话专属实例、按 arguments.instance
+      // 定位实例，传输层 already 合并 signal。exec 缺失时逐项留空（降级路径不抛）。
+      const store: ExecContextStore = { signal }
+      if (isRecord(exec)) {
+        if (exec.agent !== undefined) store.agent = exec.agent
+        if (exec.arguments !== undefined) store.arguments = exec.arguments
+      }
+      const raw = await EXEC_CTX.run(store, () =>
         (execute as (args: unknown, exec: unknown) => unknown)(args, exec),
       )
       const { value, fixes } = losslessSanitize(raw)

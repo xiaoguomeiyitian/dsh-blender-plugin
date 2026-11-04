@@ -4,6 +4,7 @@ import { ANY_SCHEMA } from '../schema-diagnostic.js'
 import { T } from '../../constants.js'
 import { renderOne } from '../../ui/cards.js'
 import { executeWatch } from './execute.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 export function registerWatch(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -14,6 +15,7 @@ export function registerWatch(ctx: HostContext, port: number): void {
           description:
             '观察时间窗/帧序列：先跑 code，再采样最多 6 帧 + 逐帧 hash（判断动画/修改器有没有动）；gui 不可用时自动走无头 worker。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             code: { type: 'string', description: '可选：观察前先执行的 Python' },
             seconds: { type: 'number', description: '观察时长，默认 2 秒（0.2-20）' },
             fps: { type: 'number', description: '采样率，默认 4（0.5-8）' },
@@ -22,7 +24,7 @@ export function registerWatch(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.watch,
+          timeoutMs: instanceTimeout(T.watch),
           async execute(args: Record<string, unknown>) {
             return executeWatch(ctx, port, args)
           },

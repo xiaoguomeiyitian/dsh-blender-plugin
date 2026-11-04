@@ -4,6 +4,7 @@ import { T } from '../../constants.js'
 import { renderOne } from '../../ui/cards.js'
 import type { HostContext } from '../../host/context.js'
 import { executePreset } from './execute.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 export function registerPreset(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -13,10 +14,11 @@ export function registerPreset(ctx: HostContext, port: number): void {
           name: 'blender_rt_preset',
           description:
             '【配方库】把「参数组合」变成可保存、可套用、可分发的资产：save / list / get / apply / delete / export / import / help。' +
-            'data 用点路径表达：材质节点 {"inputs.Base Color": [1,0,0,1]}、对象属性 {"location": [0,0,1]}、场景设置 {"render.resolution_x": 640}。' +
-            'apply 的 targets 用 MAT:材质名 / OBJ:对象名 / SCENE（逗号分隔）；不给 targets 只预览（dry_run），给了就实际写入并回报 applied/skipped/errors。' +
+            'data 用点路径表达：{"inputs.Base Color":[1,0,0,1]}、{"location":[0,0,1]}、{"render.resolution_x":640}。' +
+            'apply 的 targets 用 MAT:材质名 / OBJ:对象名 / SCENE；不给 targets 只预览（dry_run），给了就实际写入并回报 applied/skipped/errors。' +
             'export/import 走单个 JSON bundle，便于把配方分享到别的机器或会话。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             op: {
               type: 'string',
               required: true,
@@ -43,7 +45,7 @@ export function registerPreset(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.preset,
+          timeoutMs: instanceTimeout(T.preset),
           async execute(args: Record<string, unknown>) {
             return executePreset(port, args)
           },

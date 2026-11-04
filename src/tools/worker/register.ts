@@ -5,16 +5,18 @@ import { T } from '../../constants.js'
 import { renderOne } from '../../ui/cards.js'
 import { executeWorker } from './execute.js'
 import type { HostContext } from '../../host/context.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 function buildWorkerTool(ctx: HostContext, port: number) {
   return vTool({
     name: 'blender_rt_worker',
     description:
       '【交互式无头热会话】常驻 blender -b 进程：start 拉起 / exec 跑代码 / see 离屏出一帧（Workbench）/ watch 逐帧采样 / reset 清场景 / status / stop / restart / list。' +
-      'start 可带 preload（把 imgtools/assembly/blockout/visualreport/shapesolve 等模块注入 K）与 warmup；see 在无 GUI 时就是 AI 的视口，每步 50–100 ms。' +
+      'start 可带 preload（注入 imgtools/assembly/blockout 等模块）与 warmup；see 在无 GUI 时就是 AI 的视口（50–100 ms/帧）。' +
       '同一 session 的场景与 K 跨调用保留；空闲 TTL 默认 15 min（DSH_WORKER_TTL_MS 可调）。' +
-      '串行、无窗口：依赖 GUI 的 bpy.ops 可能失败；参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_worker"})。',
+      '串行、无窗口：依赖 GUI 的 bpy.ops 可能失败；细节见 catalog(tool:rt_worker)。',
     parameters: {
+      instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
       op: {
         type: 'string',
         required: true,
@@ -22,7 +24,7 @@ function buildWorkerTool(ctx: HostContext, port: number) {
       },
       name: {
         type: 'string',
-        description: '实例名（默认 default）；起多个热会话做批量小活，脏了用 restart 换新会话',
+        description: '实例名（默认 default）；起多个热会话做批量小活',
       },
       code: {
         type: 'string',
@@ -59,7 +61,7 @@ function buildWorkerTool(ctx: HostContext, port: number) {
     },
     output: { schema: ANY_SCHEMA, render: renderOne },
     isConcurrencySafe: () => false,
-    timeoutMs: T.worker,
+    timeoutMs: instanceTimeout(T.worker),
     async execute(args: Record<string, unknown>) {
       return executeWorker(args, ctx, port)
     },

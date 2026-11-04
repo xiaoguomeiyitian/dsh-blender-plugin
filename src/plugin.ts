@@ -9,6 +9,7 @@ import { z, schemaResolve } from './contracts/tool.js'
 import { losslessSanitize } from './contracts/lossless.js'
 import { asRecord } from './contracts/dynamic.js'
 import { resolveHttpPort } from './host/backend/index.js'
+import { setInstanceMode } from './host/instance-route.js'
 import { registerSchemaDiagnostic } from './tools/schema-diagnostic.js'
 import { registerLifecycle } from './plugin-lifecycle.js'
 import { registerToolSurface, registerTuiSurface } from './plugin-surfaces.js'
@@ -40,6 +41,15 @@ export interface Config {
   autoStart: boolean
   /** v2.6.1：dsh-TUI 宿主半边（选中 chip / 页脚字段 / @ 提及 / /blender 命令）；只在有对应接缝的宿主生效 */
   tui: boolean
+  /**
+   * v2.6.1-fork(delta③)：**会话级一次性实例模式**。
+   * 开：每个会话（exec.agent.id）自动分配专属 Blender 实例（容器 + 后端 + 工作目录 + 端口），
+   *     会话之间物理隔离、用完即删；现役单例（9877/blender-dsh）降级为回退与滚动窗口。
+   * 关：完全保持上游行为（单例 9877）。
+   */
+  instanceMode?: boolean
+  /** 实例管理器地址（默认 http://127.0.0.1:9880） */
+  instanceManagerUrl?: string
 }
 
 // v1.0.1+S11：z 不可用时（降级模式）不给 schema —— 宿主不会因为这里再抛一次而整体失败。
@@ -48,6 +58,9 @@ export const Config = z
       port: z.natural().default(resolveHttpPort()),
       autoStart: z.boolean().default(true),
       tui: z.boolean().default(true),
+      // fork delta ③：默认 false ⇒ 完全保持上游 v3.0.5 行为（单例 9877）。
+      instanceMode: z.boolean().default(false),
+      instanceManagerUrl: z.string().default('http://127.0.0.1:9880'),
     })
   : undefined
 
@@ -69,6 +82,12 @@ export function apply(ctx: HostContext, config: Config): void {
       ? Number(cfgIn.port)
       : resolveHttpPort()
   const autoStart = cfgIn.autoStart === undefined ? true : !!cfgIn.autoStart
+
+  // fork delta ③：会话级实例模式。INSTANCE_MODE=true ⇒ 工具出口按会话路由到专属实例
+  // （容器+后端+工作目录+端口），旧单例只作为**回退**（管理器不可用时）；实例生命周期由
+  // 管理器管（空闲 TTL / reap），插件不再拉旧单例、也不跑旧单例看护 —— 否则会养出一个
+  // 没人用的常驻容器。必须在 TUI/看护/工具注册**之前**设定（它们各自查询实例模式）。
+  setInstanceMode(cfgIn, port)
 
   // 注册顺序必须保持 v2.6.2：TUI → 看护/后端 effects → 15 个工具。
   // Cordis 逆序释放 effects，先注册 TUI/生命周期、后注册工具，卸载时才会先释放工具再杀后端。

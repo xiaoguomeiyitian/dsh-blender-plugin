@@ -5,17 +5,19 @@ import { T } from '../../constants.js'
 import { renderStructured } from '../../ui/cards.js'
 import { executeJob } from './execute.js'
 import type { HostContext } from '../../host/context.js'
+import { instanceTimeout } from '../../host/instance-route.js'
 
 function buildJobTool(port: number) {
   return vTool({
     name: 'blender_rt_job',
     description:
       '【作业层】长活后台化：op=start 立刻返回 jobId（不占客户端连接、不会被工具超时掐断）；status / collect / **wait** / kill / list。' +
-      '**wait 一次拿到结构化结果（默认 120 s/次，上限 600 s）—— 别再连发 status**（会撞宿主的重复调用检测）。' +
-      '与 headless 的分工：预期 <100 s 用 headless 直接拿结果；更长或已知要跑很久 → headless 的 as_job=true，或本工具 op=start。' +
-      'run 与 job **同一 id 空间**：headless 的 runId（run-…）也能用 status/collect/wait/kill 收；日志落 <outdir>/jobs/<id>/。' +
-      '参数细节见 blender_rt_plan(op="catalog", args={tool:"rt_job"})。',
+      '**wait 一次拿结构化结果（默认 120 s/次，上限 600 s）—— 别再连发 status**（会撞重复调用检测）。' +
+      '分工：预期 <100 s 用 headless；更长 → headless 的 as_job=true 或本工具。' +
+      'run 与 job **同一 id 空间**：headless 的 runId（run-…）也能收；日志落 <outdir>/jobs/<id>/。' +
+      '细节见 catalog(tool:rt_job)。',
     parameters: {
+      instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
       op: {
         type: 'string',
         required: true,
@@ -27,7 +29,7 @@ function buildJobTool(port: number) {
       },
       script: {
         type: 'string',
-        description: 'Python 源码（与 headless 同一套前导与结果契约）',
+        description: 'Python 源码（同 headless 前导与结果契约）',
       },
       script_file: { type: 'string', description: '直接跑 .py 文件（Windows/WSL 路径都收）' },
       args: {
@@ -65,7 +67,7 @@ function buildJobTool(port: number) {
     },
     output: { schema: ANY_SCHEMA, render: renderStructured },
     isConcurrencySafe: () => true,
-    timeoutMs: T.job,
+    timeoutMs: instanceTimeout(T.job),
     async execute(args: Record<string, unknown>) {
       return executeJob(args, port)
     },

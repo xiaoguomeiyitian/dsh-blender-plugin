@@ -7,6 +7,7 @@ import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
+import { instanceTimeout } from '../host/instance-route.js'
 
 export function registerPerf(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -17,6 +18,7 @@ export function registerPerf(ctx: HostContext, port: number): void {
           description:
             '【渲染性能】Cycles CPU 瓶颈诊断与优化预设。op=analyze 差分实测「每轮同步 / 每采样 GPU 成本」（占主线程十几秒）；op=apply 应用预设（persistent_data / OptiX 降噪 / denoising_use_gpu / auto_tile off / 采样上限）；op=revert 还原 apply 之前；op=status 看当前设置与已存快照；op=help 契约。实测背景：2318 对象场景每轮 CPU 侧同步 ≈4.2 s、GPU 单采样 ≈0.2 s（1080p）、首次 kernel JIT ≈15 s；persistent_data 让重复渲染 14.6 s → 0.79 s。',
           parameters: {
+            instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
             op: {
               type: 'string',
               required: true,
@@ -30,7 +32,7 @@ export function registerPerf(ctx: HostContext, port: number): void {
           },
           output: { schema: ANY_SCHEMA, render: renderOne },
           isConcurrencySafe: () => false,
-          timeoutMs: T.perf,
+          timeoutMs: instanceTimeout(T.perf),
           async execute(args: Record<string, unknown>) {
             if (!(await ensureBackend(port)))
               return toolError(
