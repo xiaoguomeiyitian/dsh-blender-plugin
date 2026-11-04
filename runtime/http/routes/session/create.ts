@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { objArg } from '../deps.js'
 import type { HttpRouteDeps } from '../deps.js'
 import { errorMessage } from '../../../core/json.js'
+import { parseBodyPayload } from '../../response.js'
 
 export function createLaunchHandler(E: HttpRouteDeps) {
   const { engine, json, readBody, stats } = E
@@ -14,11 +15,7 @@ export function createLaunchHandler(E: HttpRouteDeps) {
   ): Promise<void> {
     const raw = await readBody(req)
     let payload: Record<string, unknown>
-    try {
-      payload = JSON.parse(raw)
-    } catch (e) {
-      payload = {}
-    }
+    payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
     const t0 = Date.now()
     try {
       const out = objArg(await engine.launchBlender(payload))

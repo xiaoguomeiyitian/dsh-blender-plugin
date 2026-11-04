@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /perf：性能诊断（T7）
 export function createPerfRoutes(E: HttpRouteDeps) {
   const { engine, isReadOnly, json, leaseGate, readBody, stats } = E
@@ -8,11 +9,7 @@ export function createPerfRoutes(E: HttpRouteDeps) {
     async perf(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
       let payload: Record<string, unknown>
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const op = String(payload.op || 'status')
       const gate = isReadOnly('/perf', op) ? null : leaseGate(payload)
       if (gate) {

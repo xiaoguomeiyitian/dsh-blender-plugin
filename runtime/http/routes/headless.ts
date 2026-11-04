@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorCode, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /headless：同步无头（T7）
 export function createHeadlessRoutes(E: HttpRouteDeps) {
   const { engine, json, leaseGate, pushRtt, readBody, stats, streamJson } = E
@@ -12,12 +13,7 @@ export function createHeadlessRoutes(E: HttpRouteDeps) {
       _p: string,
     ): Promise<void> {
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = {}
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const gate = leaseGate(payload)
       if (gate) {
         json(res, 409, gate)

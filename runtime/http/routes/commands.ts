@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { objArg } from './deps.js'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /commands：命令清单 / 透传（T7）
 export function createCommandsRoutes(E: HttpRouteDeps) {
   const { engine, json, leaseGate, readBody, stats } = E
@@ -27,11 +28,7 @@ export function createCommandsRoutes(E: HttpRouteDeps) {
     async cmd(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
       let payload: Record<string, unknown>
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const gate = leaseGate(payload)
       if (gate) {
         json(res, 409, gate)

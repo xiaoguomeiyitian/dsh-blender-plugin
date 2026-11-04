@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /plan：契约层/规划器/catalog（T7）
 export function createPlanRoutes(E: HttpRouteDeps) {
   const { engine, isReadOnly, json, leaseGate, pushRtt, readBody, stats } = E
@@ -9,11 +10,7 @@ export function createPlanRoutes(E: HttpRouteDeps) {
       // 契约层（S1+S2）与规划器（S3）统一入口：op + args
       const raw = await readBody(req)
       let payload: Record<string, unknown>
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const op = String(payload.op || 'status')
       const gate = isReadOnly('/plan', op) ? null : leaseGate(payload)
       if (gate) {

@@ -2,6 +2,7 @@
 import { WIN_TMP, blenderJoin } from '../../paths.js'
 import { extractLoop } from '../output/index.js'
 import { KERNEL_BOOTSTRAP } from '../kernel/index.js'
+import { montageCallCode } from '../montage-args.js'
 import type { PlanCallDeps } from './index.js'
 
 export type RouteDecision = { matched: true; result: Promise<unknown> } | { matched: false }
@@ -130,16 +131,13 @@ async function handleQcRender(E: PlanCallDeps, o: string, payload: unknown): Pro
 
 async function handleMontage(E: PlanCallDeps, payload: unknown): Promise<unknown> {
   await E.ensureMontage()
-  const body =
-    'print("LOOP " + K.dsh_montage_api["montage"](_json.loads(' +
-    JSON.stringify(JSON.stringify(payload || {})) +
-    ')))'
+  // 移植 v2.6.3（issue #47）：此前有两个错 —— ①把**整个 payload** 当 paths 传（montage 签名是
+  //   montage(paths, cols, tile, out, …)）②结果用 "LOOP " + dict 拼串（dict 不可与 str 相加）
+  //   ⇒ 报 "can only concatenate str (not 'dict') to str"。现在按签名拆位置参数、
+  //   把目录约定的 images[] 映射成 paths、结果统一 JSON 化（映射逻辑见 montageCallArgs）。
+  const body = montageCallCode(payload)
   return extractLoop(
-    await E.addon.send(
-      'execute_code',
-      { code: KERNEL_BOOTSTRAP + '\nimport json as _json\n' + body },
-      300000,
-    ),
+    await E.addon.send('execute_code', { code: KERNEL_BOOTSTRAP + '\n' + body }, 300000),
   )
 }
 

@@ -140,6 +140,8 @@ export interface ShotsSummary {
   total_ms: unknown
   render_ms: unknown
   engine: unknown
+  /** 渲染结束后的场景引擎（engine=引擎选择；auto/软件光栅下两者不同） */
+  engine_scene_after: unknown
   samples: unknown
   device_line: unknown
   unknown_views: unknown
@@ -191,6 +193,9 @@ export function summarizeShots(shotsRes: Record<string, unknown>): ShotsSummary 
     total_ms: shotsRes.total_ms || null,
     render_ms: shotsRes.render_ms || null,
     engine: shotsRes.engine || null,
+    // 移植 v2.6.3（issue #48 补）："engine" 是本批**实际用**的引擎，"engine_scene_after"
+    // 是渲完还原后的场景引擎 —— auto/软件光栅下两者不同，只报一个会自相矛盾。
+    engine_scene_after: shotsRes.engine_scene_after || null,
     samples: shotsRes.samples || null,
     device_line: shotsRes.device_line || null,
     unknown_views: shotsRes.unknown_views || null,

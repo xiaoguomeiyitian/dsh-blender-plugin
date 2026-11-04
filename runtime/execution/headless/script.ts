@@ -1,5 +1,6 @@
 import {
   PATH_GUARD,
+  SHOTS_DEFAULTS,
   envPrelude,
   scriptFileBlock,
   shotsBlock,
@@ -65,7 +66,7 @@ export function buildHeadlessScript(p: PreparedHeadless): BuiltHeadlessScript {
   // v0.9.3（F1）：shots 走 qc_render_views —— outdir 用 Windows 形态（Blender 侧），其余键由调用方定
   const shotsPre = p.shotsWanted
     ? shotsBlock(
-        Object.assign({ engine: 'keep', lock: true, warmup: true, tag: 'shot' }, p.shotsSpec, {
+        Object.assign({}, SHOTS_DEFAULTS, { lock: true, tag: 'shot' }, p.shotsSpec, {
           outdir: p.outdirWin,
         }),
       ) + NL

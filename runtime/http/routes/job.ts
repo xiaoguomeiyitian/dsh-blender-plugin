@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /job：作业层（T7）
 export function createJobRoutes(E: HttpRouteDeps) {
   const { engine, isReadOnly, json, leaseGate, pushRtt, readBody, stats, streamJson } = E
@@ -8,12 +9,7 @@ export function createJobRoutes(E: HttpRouteDeps) {
     async job(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       // 作业层：start / status / collect / kill / list（长任务后台化，渲染一整晚）
       const raw = await readBody(req)
-      let payload: Record<string, unknown> = {}
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      let payload: Record<string, unknown> = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const op = String(payload.op || 'list')
       const gate = isReadOnly('/job', op) ? null : leaseGate(payload)
       if (gate) {

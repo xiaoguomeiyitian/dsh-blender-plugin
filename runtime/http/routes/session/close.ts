@@ -1,6 +1,7 @@
 // /session 路由：lease / release（F1.1 拆分）
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from '../deps.js'
+import { parseBodyPayload } from '../../response.js'
 
 export function createLeaseHandler(E: HttpRouteDeps) {
   const { json, leaseAcquire, leaseView, readBody, releaseStaleLease } = E
@@ -12,11 +13,7 @@ export function createLeaseHandler(E: HttpRouteDeps) {
   ): Promise<void> {
     const raw = await readBody(req)
     let payload: Record<string, unknown>
-    try {
-      payload = JSON.parse(raw)
-    } catch (e) {
-      payload = {}
-    }
+    payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
     const holder = String(payload.holder || 'anonymous')
     releaseStaleLease('op=lease 到达时探活发现持有者进程不存在') // v0.9.4
     if (payload.renewOnly) {
@@ -65,11 +62,7 @@ export function createReleaseHandler(E: HttpRouteDeps) {
   ): Promise<void> {
     const raw = await readBody(req)
     let payload: Record<string, unknown>
-    try {
-      payload = JSON.parse(raw)
-    } catch (e) {
-      payload = {}
-    }
+    payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
     const want = String(payload.holder || '')
     let released: string | null = null
     if (LEASE.holder && (!want || LEASE.holder === want)) {

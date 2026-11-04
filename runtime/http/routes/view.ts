@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { objArg } from './deps.js'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /view：自定义视角（T7）
 export function createViewRoutes(E: HttpRouteDeps) {
   const { engine, json, pushRtt, readBody, stats } = E
@@ -9,11 +10,7 @@ export function createViewRoutes(E: HttpRouteDeps) {
     async view(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
       let payload: Record<string, unknown>
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const t0 = Date.now()
       try {
         const out = objArg(await engine.view(objArg(payload)))

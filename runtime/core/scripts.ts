@@ -96,6 +96,28 @@ export const PATH_GUARD =
         '    pass',
       ].join('\n')
 
+/**
+ * shots 的默认参数（移植 v2.6.3 · issue #48：无头容器里软件 GL 出图稳定化）。
+ *
+ * 现场实测（blender-dsh-bridge:1.10 容器，Mesa/llvmpipe，无真实 GPU）：
+ *   320×180 单帧 —— EEVEE 34.36 s / WORKBENCH 2.76 s / CYCLES(CPU,4 samples) 6.33 s
+ *   ⇒ EEVEE 在软件光栅下慢 12 倍；shots 又默认吃**场景分辨率**（1920×1080）+ 64 samples
+ *      ⇒ 单张几分钟，整批必然撞 timeout（实测作业 180 s 被杀，零产出）。
+ * 处置：
+ *   · engine="auto" ⇒ 容器内（无 /dev/dri）自动选 WORKBENCH；有真 GPU 则沿用场景引擎。
+ *   · res 默认 960×540（不再吃场景的 1080p；调用方显式传 res 仍优先）。
+ *   · warmup=false ⇒ shots 不做计时测量，省掉首帧的一次整帧重渲。
+ *   · budget_s / per_view_budget_s + ladder ⇒ 单张超预算就降档重渲，不拖死整批。
+ */
+export const SHOTS_DEFAULTS = {
+  engine: 'auto',
+  res: [960, 540],
+  warmup: false,
+  budget_s: 120,
+  per_view_budget_s: 45,
+  ladder: [{ scale: 1.0, samples: 32 }, { scale: 0.7, samples: 8 }, { scale: 0.5, samples: 4 }],
+}
+
 function shotsBlock(args: unknown): string {
   // ⚠ JSON.stringify 出来的是 JS 字面量（true/false/null），**不是 Python 字面量** —— 直接内联会 NameError: true。
   // 所以走 json.loads(<JSON 字符串字面量>)：既安全又保留 true/false/null 的语义。

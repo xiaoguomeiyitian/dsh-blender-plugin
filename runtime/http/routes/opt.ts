@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
+import { parseBodyPayload } from '../response.js'
 // HTTP 路由 /opt：优化（T7）
 export function createOptRoutes(E: HttpRouteDeps) {
   const { engine, isReadOnly, json, leaseGate, readBody, stats } = E
@@ -8,11 +9,7 @@ export function createOptRoutes(E: HttpRouteDeps) {
     async opt(req: IncomingMessage, res: ServerResponse, _url: URL, _p: string): Promise<void> {
       const raw = await readBody(req)
       let payload: Record<string, unknown>
-      try {
-        payload = JSON.parse(raw)
-      } catch (e) {
-        payload = {}
-      }
+      payload = parseBodyPayload(raw) as Record<string, unknown> | null ?? {}
       const op = String(payload.op || 'opt_analyze')
       const gate = isReadOnly('/opt', op) ? null : leaseGate(payload)
       if (gate) {

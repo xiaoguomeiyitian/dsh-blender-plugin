@@ -1,5 +1,6 @@
 import type { ServerResponse, IncomingMessage } from 'node:http'
 import { errorMessage, errorField } from '../core/json.js'
+import { restoreProviderShape } from '../core/provider-shape.js'
 // HTTP 响应原语（T7）：JSON / ndjson 流式 / 请求体读取 / 宿主 CORS。
 // 行为冻结：状态码、content-type、cache-control、心跳间隔（15 s）、body 上限（4 MiB）全部不变。
 function json(res: ServerResponse, code: number, obj: unknown): void {
@@ -68,6 +69,20 @@ function readBody(req: IncomingMessage, limit = 1 << 22): Promise<string> {
     req.on('error', reject)
   })
 }
+
+/**
+ * 请求体解析 + **入参形状还原**（移植 v2.6.3 · issue #47）。
+ * 宿主把 `type:"json"` 入参交给 provider 时，provider 会字符串化编码（数字/布尔→字符串、
+ * 数组→{"item":…}）；所有路由的入参都在这里过一道还原，op 收到的就是真类型。
+ * 解析失败返回 null（各路由按自己的兜底处理）。
+ */
+function parseBodyPayload(raw: string): unknown {
+  try {
+    return restoreProviderShape(JSON.parse(raw))
+  } catch (e) {
+    return null
+  }
+}
 // CORS 控制浏览器对响应的读取，不是身份验证，也不阻止非浏览器客户端伪造 Origin。
 const HOST_ORIGIN_RE = /^(http:\/\/(127\.0\.0\.1|localhost)(:\d+)?|dsh-app:\/\/app)$/
 function hostCorsHeaders(origin: unknown): Record<string, string> {
@@ -108,6 +123,7 @@ export {
   json,
   streamJson,
   readBody,
+  parseBodyPayload,
   hostCorsHeaders,
   hostJson,
   hostErrText,

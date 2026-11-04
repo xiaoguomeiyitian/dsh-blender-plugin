@@ -40,10 +40,14 @@ export interface PlanCallDeps {
 
 import { prepareEvidencePayload, routeMainPlanOps, routeModulePlanOps } from './plan-call.js'
 import { routeExtRouting } from './ext-routing.js'
+import { restoreProviderShape } from '../provider-shape.js'
 
 async function routePlanCall(E: PlanCallDeps, op: unknown, payload: unknown): Promise<unknown> {
   const o = String(op || 'status')
-  const withEvidence = await prepareEvidencePayload(E, o, payload)
+  // 移植 v2.6.3（issue #47）：provider 会把无类型 JSON 入参字符串化编码（数字/布尔→字符串、
+  // 数组→{"item":…}）⇒ 在入参边界统一还原，op 收到的就是真类型（幂等）。
+  const shaped = restoreProviderShape(payload)
+  const withEvidence = await prepareEvidencePayload(E, o, shaped)
   const main = await routeMainPlanOps(E, o, withEvidence)
   if (main.matched) return main.result
   const moduleRoute = await routeModulePlanOps(E, o, withEvidence)

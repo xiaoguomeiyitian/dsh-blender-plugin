@@ -1,7 +1,7 @@
 // /host 路由处理器（F1.1 从 http/host.ts 拆出）
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { stats } from '../config.js'
-import { hostCorsHeaders, readBody } from '../response.js'
+import { hostCorsHeaders, parseBodyPayload, readBody } from '../response.js'
 import { trimJob, clampIntParam } from '../jobs.js'
 import { handleSceneItems, hostStateView } from './scene-items.js'
 import type { HostRoutesDeps } from './index.js'
@@ -77,11 +77,8 @@ async function handleHostJobsLog(
 
 async function readJsonPayload(req: IncomingMessage): Promise<unknown> {
   const raw = await readBody(req)
-  try {
-    return JSON.parse(raw)
-  } catch (e) {
-    return null
-  }
+  // 移植 v2.6.3（issue #47）：body 解析顺带做入参形状还原（provider 会字符串化编码无类型 JSON 入参）。
+  return parseBodyPayload(raw)
 }
 
 async function handleSelectionPost(

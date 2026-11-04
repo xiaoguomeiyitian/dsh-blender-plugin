@@ -4,6 +4,7 @@ import { GPU_PRELUDE, pyModuleFile, pyModuleNames } from '../../../paths.js'
 import { slipFixPath } from '../../../core/output/index.js'
 import {
   PATH_GUARD,
+  SHOTS_DEFAULTS,
   envPrelude,
   scriptFileBlock,
   shotsBlock,
@@ -95,7 +96,7 @@ export function buildJobParts(
   if (jobShotsWanted)
     parts.push(
       shotsBlock(
-        Object.assign({ engine: 'keep', lock: true, warmup: true, tag: 'shot' }, jobShotsSpec, {
+        Object.assign({}, SHOTS_DEFAULTS, { lock: true, tag: 'shot' }, jobShotsSpec, {
           outdir: a.outdirWin,
         }),
       ),
