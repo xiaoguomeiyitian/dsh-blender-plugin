@@ -64,6 +64,29 @@ def test_backend_url_defaults_and_strips_trailing_slash():
         bpy.context.scene.dshbb_backend_url = previous
 
 
+def test_backend_url_prefers_environment_variable_over_scene_property(monkeypatch):
+    """DSH_BLENDER_BACKEND_URL 必须**压过**场景属性。
+
+    回归背景（2026-11-05 实测）：v1.10 单文件 addon 的取值顺序是
+    **env → 场景属性 → 默认**；v1.11 包形态只读场景属性 ⇒ 逐实例部署里
+    每个实例都回访默认的 127.0.0.1:9877，而不是自己那台实例后端
+    （manager.selftest 的「A 的 addon 回访到 A 的后端」就是这么红的）。
+    """
+    previous = bpy.context.scene.dshbb_backend_url
+    try:
+        bpy.context.scene.dshbb_backend_url = "http://127.0.0.1:9999"
+        monkeypatch.setenv("DSH_BLENDER_BACKEND_URL", "http://127.0.0.1:8888/")
+        assert config.dshbb_backend_url() == "http://127.0.0.1:8888"
+
+        # env 缺失（或只有空白）⇒ 回落场景属性
+        monkeypatch.delenv("DSH_BLENDER_BACKEND_URL")
+        assert config.dshbb_backend_url() == "http://127.0.0.1:9999"
+        monkeypatch.setenv("DSH_BLENDER_BACKEND_URL", "   ")
+        assert config.dshbb_backend_url() == "http://127.0.0.1:9999"
+    finally:
+        bpy.context.scene.dshbb_backend_url = previous
+
+
 def test_addon_preferences_are_read_from_the_module_entry():
     preferences = SimpleNamespace(telemetry_consent=True)
     context = SimpleNamespace(

@@ -140,6 +140,15 @@ DEFAULT_DSH_BACKEND = "http://127.0.0.1:9877"
 
 
 def dshbb_backend_url():
+    """Backend base URL for the addon→DSH push (env → scene prop → default).
+
+    取值顺序与 v1.10 单文件版一致（**env 优先**）：逐实例部署靠
+    DSH_BLENDER_BACKEND_URL 把每个实例的 addon 指向自己那台后端 ——
+    只读场景属性会让所有实例都回访默认的 127.0.0.1:9877（互相串台）。
+    """
+    env = str(read_env_var("DSH_BLENDER_BACKEND_URL") or "").strip()
+    if env:
+        return env.rstrip("/")
     try:
         url = bpy.context.scene.dshbb_backend_url  # pyright: ignore[reportAttributeAccessIssue]
     except Exception:
