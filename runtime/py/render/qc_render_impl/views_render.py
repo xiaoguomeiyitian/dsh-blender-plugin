@@ -524,6 +524,11 @@ def _qv_finish_out(st):
         st["db_after"], st["db_before"], st["db_delta"], st["deduped_views"], st["dev_after"])
     dev_batch, device_check, device_used, eng_mode, engine_check = (
         st["dev_batch"], st["device_check"], st["device_used"], st["eng_mode"], st["engine_check"])
+    # v2.6.3（issue #48 补，移植）：这批**实际用的引擎**（见下面 out["engine"]）。
+    # ⚠️ 此前这条移植只改了 out["engine"] 的取值，却漏了把 eng_after 从 st 解包出来
+    #    ⇒ 函数体里的裸名 eng_after 触发 NameError: name 'eng_after' is not defined
+    #    ⇒ 整个 qc_render_views 批次直接失败（2026-11-05 真机验收踩中）。
+    eng_after = st["eng_after"]
     entries, err, fallback_used, jsonl, ladder = (
         st["entries"], st["err"], st["fallback_used"], st["jsonl"], st["ladder"])
     ladder_idx, lights_cfg, lights_mode, lock_line, lock_path = (
