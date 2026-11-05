@@ -7,7 +7,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { decideStart, probeTcp, probeHttp, waitHttp } from '../../../../runtime/backend_probe.js'
-import { CFG, describeConfig } from '../../../../runtime/config.js'
+import { describeConfig } from '../../../../runtime/config.js'
 import { closedPort, startFakeBackend } from '../../../helpers/fake-backend.mjs'
 import { createFakeContext } from '../../../helpers/fake-context'
 import { pkgPath } from '../../../helpers/pkg'
@@ -63,22 +63,62 @@ describe('backend start decision table', () => {
 })
 
 describe('configuration contract', () => {
+  /**
+   * 在**洁净环境**里取配置：清掉全部 DSH_BLENDER_* 变量 + 指向不存在的配置文件。
+   *
+   * 为什么必须洁净：直接 import 配置模块时，它会读**现场**配置
+   * （$DSH_BLENDER_CONFIG → 包根/dsh-blender.config.json → ~/.dsh/dsh-blender.config.json）。
+   * 部署机上那份写着容器 IP（addonHost=172.18.0.3、addonPort=19876）⇒
+   * "发布的是文档默认值" 这条断言在部署机上必红，而它跟代码对不对毫无关系
+   * （单元测试必须自足，不能依赖运行现场）。
+   */
+  function configInCleanEnv(extraEnv: Record<string, string> = {}): {
+    cfg: Record<string, unknown>
+    summary: Record<string, unknown>
+  } {
+    const code =
+      'import(' +
+      JSON.stringify(pathToFileURL(pkgPath('lib', 'runtime', 'config.js')).href) +
+      ').then(m => console.log(JSON.stringify({ cfg: { host: m.CFG.addonHost, addonPort: m.CFG.addonPort, httpPort: m.CFG.httpPort, leaseTtlMs: m.CFG.leaseTtlMs, workerPort: m.CFG.workerPort, holder: m.CFG.holder }, summary: m.describeConfig() })))'
+    const env: NodeJS.ProcessEnv = { ...process.env }
+    for (const key of Object.keys(env)) {
+      if (key.startsWith('DSH_BLENDER_')) delete env[key]
+    }
+    // 配置文件有**三条来源**：$DSH_BLENDER_CONFIG → <包根>/dsh-blender.config.json
+    // → ~/.dsh/dsh-blender.config.json。指空第一条只会顺延到下一条 ⇒
+    // 要拿到纯默认值，得把 HOME 也指到临时目录（否则读到现场那份容器 IP）。
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-t14-home-'))
+    env.DSH_BLENDER_CONFIG = pkgPath('tmp', 'does-not-exist.json')
+    env.HOME = home
+    try {
+      const raw = execFileSync(process.execPath, ['--input-type=module', '-e', code], {
+        encoding: 'utf8',
+        env: { ...env, ...extraEnv },
+      })
+      return JSON.parse(raw.trim().split('\n').pop()!)
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  }
+
   it('publishes the documented defaults', () => {
-    const d = describeConfig()
-    expect(CFG.addonHost).toBe('127.0.0.1')
-    expect(CFG.addonPort).toBe(9876)
-    expect(CFG.httpPort).toBe(9877)
-    expect(CFG.leaseTtlMs).toBe(600000)
-    expect(CFG.workerPort).toBe(9879)
-    expect(d.addon).toBe('127.0.0.1:9876')
-    expect(d.http).toBe('127.0.0.1:9877')
-    expect(d.leaseTtlMs).toBe(600000)
-    expect(d.workerPort).toBe(9879)
+    const { cfg, summary } = configInCleanEnv()
+    expect(cfg.host).toBe('127.0.0.1')
+    expect(cfg.addonPort).toBe(9876)
+    expect(cfg.httpPort).toBe(9877)
+    expect(cfg.leaseTtlMs).toBe(600000)
+    expect(cfg.workerPort).toBe(9879)
+    expect(summary.addon).toBe('127.0.0.1:9876')
+    expect(summary.http).toBe('127.0.0.1:9877')
+    expect(summary.leaseTtlMs).toBe(600000)
+    expect(summary.workerPort).toBe(9879)
   })
 
   it('lets the command-line port override the summary only', () => {
+    // describeConfig 是纯函数（只吃显式入参）⇒ 与现场配置无关
     expect(describeConfig({ httpPort: 19999 }).http).toBe('127.0.0.1:19999')
-    expect(describeConfig().http).toBe('127.0.0.1:9877')
+    // 洁净环境下读到的仍是文档默认值
+    expect(configInCleanEnv().summary.http).toBe('127.0.0.1:9877')
   })
 
   it('reads a config file when no environment override is present', () => {

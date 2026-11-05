@@ -33,9 +33,15 @@ function cleanEnv(extra = {}) {
   for (const [key, value] of Object.entries(process.env)) {
     const lower = key.toLowerCase()
     if (lower.startsWith('npm_config_') || lower.startsWith('npm_lifecycle_')) continue
+    // 现场配置不能带进"干净安装"冒烟：配置模块会读 $DSH_BLENDER_CONFIG →
+    // <包根>/dsh-blender.config.json → ~/.dsh/dsh-blender.config.json。
+    // 部署机上那份写着容器 IP/端口（addonHost=172.18.0.3）⇒ 引擎会去连**真部署**的
+    // addon，而不是本冒烟自己起的假 addon ⇒ doctor 永远不 ok（与被测代码无关）。
+    if (key.startsWith('DSH_BLENDER_')) continue
     env[key] = value
   }
-  return { ...env, TEMP: tmp, TMP: tmp, ...extra }
+  // HOME 指临时目录 ⇒ ~/.dsh/dsh-blender.config.json 不存在（配置链只剩包根那份）
+  return { ...env, HOME: tmp, USERPROFILE: tmp, TEMP: tmp, TMP: tmp, ...extra }
 }
 
 function run(cmd, args, opts = {}) {
