@@ -6,7 +6,7 @@ export const COMMAND_CATALOG: Record<string, { d: string; gate: string | null }>
   get_addon_info: { d: 'addon 版本与协议号', gate: null },
   get_object_info: { d: '单对象详情（参数 name）', gate: null },
   get_viewport_screenshot: { d: '视口离屏截图（max_size, filepath, format）', gate: null },
-  // addon v1.10（协议号 11）的常驻命令 —— 让模型查 API 而不是猜
+  // addon v1.11（协议号 11）的常驻命令 —— 让模型查 API 而不是猜
   describe_node_type: {
     d: '查节点类型的全部 socket/属性（bl_idname, property_overrides）—— 建着色器/几何节点前先查，别猜 socket 顺序',
     gate: null,

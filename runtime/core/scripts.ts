@@ -99,7 +99,7 @@ export const PATH_GUARD =
 /**
  * shots 的默认参数（移植 v2.6.3 · issue #48：无头容器里软件 GL 出图稳定化）。
  *
- * 现场实测（blender-dsh-bridge:1.10 容器，Mesa/llvmpipe，无真实 GPU）：
+ * 现场实测（blender-dsh-bridge:1.11 容器，Mesa/llvmpipe，无真实 GPU）：
  *   320×180 单帧 —— EEVEE 34.36 s / WORKBENCH 2.76 s / CYCLES(CPU,4 samples) 6.33 s
  *   ⇒ EEVEE 在软件光栅下慢 12 倍；shots 又默认吃**场景分辨率**（1920×1080）+ 64 samples
  *      ⇒ 单张几分钟，整批必然撞 timeout（实测作业 180 s 被杀，零产出）。
