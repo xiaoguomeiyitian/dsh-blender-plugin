@@ -6,7 +6,7 @@
 // 传 ⇒ 拼图拿到 dict）。
 export const MONTAGE_KWARGS = ['paths', 'cols', 'tile', 'out', 'labels', 'grid', 'scale_m']
 
-export function montageCallArgs(payload: unknown): Record<string, unknown> {
+export function montageCallArgs(payload?: unknown): Record<string, unknown> {
   let P: Record<string, unknown> =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? { ...(payload as Record<string, unknown>) }

@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
+import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
 import * as plugin from '../../../../src/index'
 import { createFakeContext, type CapturedTool } from '../../../helpers/fake-context'
 import { closedPort, startFakeBackend } from '../../../helpers/fake-backend.mjs'
@@ -130,7 +130,7 @@ function hasUndefined(value: unknown, seen = new Set<unknown>()): boolean {
 }
 
 function lossless(value: unknown): void {
-  expect(() => snapshotJsonValue(value)).not.toThrow()
+  expect(() => snapshotSessionFormatJson(value)).not.toThrow()
   expect(JSON.parse(JSON.stringify(value))).toEqual(value)
 }
 

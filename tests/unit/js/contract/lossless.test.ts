@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as plugin from '../../../../src/index'
 import { asRecord } from '../../../../src/contracts/dynamic'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
+import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
 
 const { losslessSanitize, receiptEnvelope, headlessReceipt, promotedReceipt } = plugin.__internals
 
@@ -29,7 +29,7 @@ describe('lossless return channel', () => {
     })
     expect(fixes.length).toBeGreaterThan(0)
     expect(hasUndefined(value)).toBe(false)
-    expect(() => snapshotJsonValue(value)).not.toThrow()
+    expect(() => snapshotSessionFormatJson(value)).not.toThrow()
     expect(JSON.stringify(value)).not.toContain('undefined')
   })
 
@@ -39,7 +39,7 @@ describe('lossless return channel', () => {
     const clean = asRecord(losslessSanitize(envelope).value)
     const resultJson = asRecord(clean.resultJson)
     expect(hasUndefined(clean)).toBe(false)
-    expect(() => snapshotJsonValue(clean)).not.toThrow()
+    expect(() => snapshotSessionFormatJson(clean)).not.toThrow()
     expect(resultJson.b).toBe(1)
     expect(resultJson.a).toBeUndefined()
   })
@@ -49,7 +49,7 @@ describe('lossless return channel', () => {
     expect(out.text).toContain('HEADLESS')
     expect(out.envelope.status).toBe('done')
     const clean = losslessSanitize(out.envelope).value
-    expect(() => snapshotJsonValue(clean)).not.toThrow()
+    expect(() => snapshotSessionFormatJson(clean)).not.toThrow()
   })
 
   it('marks promoted receipts explicitly', () => {
@@ -57,6 +57,6 @@ describe('lossless return channel', () => {
     expect(out.envelope.promoted).toBe(true)
     expect(out.envelope.jobId).toBe('job-1')
     const clean = losslessSanitize(out.envelope).value
-    expect(() => snapshotJsonValue(clean)).not.toThrow()
+    expect(() => snapshotSessionFormatJson(clean)).not.toThrow()
   })
 })

@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ToolRegistry } from '@deepseek-ai/dsh-tools'
+import type { ToolRuntime } from '@deepseek-ai/dsh-tools'
 
 /** Minimal shape of the host skill service used by the optional bundled-skill mount. */
 export interface HostSkillService {
@@ -12,8 +12,12 @@ export interface HostSkillService {
  * Cordis augments Context with tools when @deepseek-ai/dsh-tools is in the
  * program; spelling that out here keeps the registration surface typed without
  * falling back to any. Hosts without the skill service simply omit skills.
+ *
+ * `ToolRuntime` is the host's tool service (dsh-tools >= 0.2). Older hosts
+ * named the same service `ToolRegistry`; the runtime shape this plugin relies
+ * on (`register(definition) => () => void`) is identical in both.
  */
 export type HostContext = Context & {
-  tools: ToolRegistry
+  tools: ToolRuntime
   skills?: HostSkillService
 }
