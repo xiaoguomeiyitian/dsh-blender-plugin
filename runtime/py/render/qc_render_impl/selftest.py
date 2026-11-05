@@ -5,7 +5,7 @@ from .lock import _lock_path, render_lock
 from .geom import _collect_objs, _corners, _db_counts, _project_px, _solve_view
 from .parts import _legend_line_count
 from .main import qc_render_views
-from .rig import _set_engine, _software_gl, _SOFT_GL
+from .rig import _set_engine, _software_gl
 
 def _selftest_projection():
     """老自检内容（v0.8.8 原样保留）：解算出的相机用 Blender 自己的 world_to_camera_view 复核。
