@@ -2,7 +2,7 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, leasedText, numTriple } from '../../host/http.js'
+import { backendErrorText, backendPost, leasedText, numTriple } from '../../host/http.js'
 import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { asArray, asRecord, text } from '../../contracts/dynamic.js'
@@ -63,7 +63,7 @@ function workerFailure(op: string, raw: unknown): unknown {
   const r = asRecord(raw)
   const rr = asRecord(r.result)
   const bits: string[] = []
-  bits.push('WORKER ' + op + ' 失败 · ' + text(r.error || rr.error || 'unknown'))
+  bits.push('WORKER ' + op + ' 失败 · ' + backendErrorText(r))
   if (rr.traceback) bits.push('--- traceback ---' + LF + redactSecrets(rr.traceback).slice(0, 2000))
   if (rr.stderr && String(rr.stderr).trim())
     bits.push('stderr: ' + redactSecrets(rr.stderr).slice(0, 1200))
@@ -81,7 +81,7 @@ async function workerSee(ctx: HostContext, res: Record<string, unknown>): Promis
   if (res.ok === false)
     return toolError(
       'backend_error',
-      'WORKER see 失败 · ' + text(res.error || 'unknown'),
+      'WORKER see 失败 · ' + backendErrorText(res),
       '用 blender_rt_worker op=start 检查无头 worker；或改用 blender_rt_see',
       res.traceback ? redactSecrets(res.traceback).slice(-1200) : undefined,
     )
@@ -125,7 +125,7 @@ function workerReset(res: Record<string, unknown>): unknown {
   if (!res.ok)
     return toolError(
       'backend_error',
-      'WORKER reset 失败 · ' + text(res.error || 'unknown'),
+      'WORKER reset 失败 · ' + backendErrorText(res),
       '用 blender_rt_worker op=list 查看会话；必要时重新 op=start',
     )
   return { text: 'WORKER reset ok · objects=' + text(res.objects) }
@@ -135,7 +135,7 @@ function workerExec(res: Record<string, unknown>): unknown {
   if (!res.ok)
     return toolError(
       'backend_error',
-      'WORKER exec 失败 · ' + text(res.error || 'unknown'),
+      'WORKER exec 失败 · ' + backendErrorText(res),
       '用 blender_rt_worker op=start 检查会话；或改用 blender_rt_headless',
       res.traceback ? redactSecrets(res.traceback).slice(0, 1500) : undefined,
     )

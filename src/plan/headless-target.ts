@@ -1,4 +1,4 @@
-import { backendPost } from '../host/http.js'
+import { backendErrorText, backendPost } from '../host/http.js'
 import type { HostContext } from '../host/context.js'
 import { attachPaths, planImagePaths } from '../utils/image.js'
 import { redactSecrets } from '../tools/errors.js'
@@ -98,7 +98,7 @@ export async function planViaWorker(
     if (st.ok !== true)
       return {
         ok: false,
-        error: '无头 worker 启动失败：' + text(st.error || st.raw || 'unknown'),
+        error: '无头 worker 启动失败：' + backendErrorText(st),
       }
     const code =
       'import json as _json\n_s = _json.dumps(_json.loads(' +
@@ -120,7 +120,7 @@ export async function planViaWorker(
     if (r.ok !== true) {
       return {
         ok: false,
-        error: '无头 plan 执行失败：' + text(r.error || rr.error || 'unknown'),
+        error: '无头 plan 执行失败：' + backendErrorText(r),
         hint: redactSecrets(rr.traceback || '').slice(-1200),
       }
     }

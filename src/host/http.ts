@@ -44,15 +44,19 @@ export async function backendJson(
  * 现在：解析失败就按行往前找最后一条非心跳 JSON；同时把心跳条数记进 __heartbeats 供工具层提示。
  */
 /**
- * /act 失败时的错误文案（移植 fork delta · issue #47 同族）。
+ * 后端失败的**文案取真因**（移植 fork delta · issue #47 同族）。
  *
  * 旧写法只认 `r.error` ⇒ 后端把真因放在 `result.error` / `result.sig_hint` 里时
  * （实测：blender_rt_txn op=revert 少传 label 回 "参数不匹配: t_revert() missing
  * 1 required positional argument: 'label'"）全部显示成 "unknown"，真因被吞。
  * 现在按 top → result.error → result.sig_hint → raw 的顺序取，并带上函数签名；
  * 还覆盖 r.detail / r.message（后端 ToolFailure 信封的另一种形态）。
+ *
+ * ⚠️ 这不是 /act 专属：引擎层所有 op（txn / preset / cmd / perf / opt / job …）
+ *    的失败都走同一个「路由把引擎返回包进 result」的形状 ⇒ **所有工具层取失败
+ *    文案都必须走这个函数**，否则同一个坑会在每个工具上各复现一次。
  */
-export function actErrorText(r: unknown, fallback = 'unknown'): string {
+export function backendErrorText(r: unknown, fallback = 'unknown'): string {
   if (!isRecord(r)) return fallback
   const top = r.error != null ? text(r.error) : ''
   const res = isRecord(r.result) ? r.result : null
@@ -64,6 +68,12 @@ export function actErrorText(r: unknown, fallback = 'unknown'): string {
   const hint = sig ? '（签名：' + sig.slice(0, 400) + '）' : ''
   return top || inner + hint || detail || msg || raw || fallback
 }
+
+/**
+ * 旧名（/act 语境）保留为别名 —— 已有契约测试与外部调用仍按 actErrorText 引用。
+ * @deprecated 新代码请用 {@link backendErrorText}（它对所有工具通用）。
+ */
+export const actErrorText = backendErrorText
 
 export function parseBackendBody(body: unknown): Record<string, unknown> {
   const t = String(body == null ? '' : body)

@@ -2,7 +2,14 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { actErrorText, backendPost, fetchFrame, leasedText, numTriple } from '../../host/http.js'
+import {
+  actErrorText,
+  backendErrorText,
+  backendPost,
+  fetchFrame,
+  leasedText,
+  numTriple,
+} from '../../host/http.js'
 import { frameDedupe, dedupeNote } from '../../utils/frame-cache.js'
 import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
@@ -161,7 +168,7 @@ export async function doViaSession(
     if (r.ok !== true) {
       return toolError(
         'backend_error',
-        'ACT(session) 失败 · ' + text(r.error || rr.error || 'unknown'),
+        'ACT(session) 失败 · ' + backendErrorText(r),
         '先 blender_rt_worker op=start name=' + nm + '，或检查后端 /worker 路由',
       )
     }
@@ -185,7 +192,7 @@ async function startSession(port: number, nm: string, preload: string): Promise<
   if (st.ok === true) return null
   return toolError(
     'backend_error',
-    '无头会话启动失败 · ' + text(st.error || st.raw || 'unknown'),
+    '无头会话启动失败 · ' + backendErrorText(st),
     '先 blender_rt_worker op=start 启动持久 worker，或检查后端 /worker 路由',
   )
 }

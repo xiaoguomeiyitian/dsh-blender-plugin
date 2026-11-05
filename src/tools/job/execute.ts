@@ -1,7 +1,7 @@
 /** blender_rt_job 执行层：参数校验 → 后端调用 → 回执装配（行为与 v2.6.2 一致）。 */
 import { ensureBackend } from '../../host/backend/index.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
-import { backendPost, leasedText, splitArgs } from '../../host/http.js'
+import { backendErrorText, backendPost, leasedText, splitArgs } from '../../host/http.js'
 import { detectFileAlias } from '../../host/runtime-bridge.js'
 import { toolError } from '../errors.js'
 import { asRecord, optionalText, text } from '../../contracts/dynamic.js'
@@ -41,7 +41,7 @@ export async function executeJob(args: Record<string, unknown>, port: number): P
   if (!r || r.ok !== true)
     return toolError(
       'backend_error',
-      'JOB ' + op + ' 失败 · ' + text(r.error || r.raw || 'unknown'),
+      'JOB ' + op + ' 失败 · ' + backendErrorText(r),
       '用 blender_rt_job op=list 查看作业',
     )
   if (op === 'list') return renderJobList(r)

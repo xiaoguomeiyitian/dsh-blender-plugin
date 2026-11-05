@@ -2,7 +2,7 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from './schema-diagnostic.js'
 import { T, BACKEND_HINT } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendJson } from '../host/http.js'
+import { backendErrorText, backendJson } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
@@ -33,7 +33,7 @@ export function registerCommands(ctx: HostContext, port: number): void {
             if (!r || r.ok !== true)
               return toolError(
                 'backend_error',
-                'COMMANDS 失败 · ' + text(r.error || r.raw || 'unknown'),
+                'COMMANDS 失败 · ' + backendErrorText(r),
                 '先 blender_viewport op=status 确认后端与 addon',
               )
             const disabled = asArray(r.disabled)

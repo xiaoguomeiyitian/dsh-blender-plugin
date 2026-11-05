@@ -3,7 +3,7 @@ import type { HostContext } from '../../host/context.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, fetchFrame, fetchView, numTriple } from '../../host/http.js'
+import { backendErrorText, backendPost, fetchFrame, fetchView, numTriple } from '../../host/http.js'
 import { frameDedupe, dedupeNote } from '../../utils/frame-cache.js'
 import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
@@ -218,7 +218,7 @@ async function seeViaWorker(
     if (res.ok === false)
       return toolError(
         'backend_error',
-        '无头 see 失败 · ' + text(res.error || 'unknown'),
+        '无头 see 失败 · ' + backendErrorText(res),
         '用 blender_rt_worker op=start 检查无头 worker；或改用 GUI 通道',
         res.traceback ? redactSecrets(res.traceback).slice(-1200) : undefined,
       )

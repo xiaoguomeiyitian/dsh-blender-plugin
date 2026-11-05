@@ -1,6 +1,6 @@
 /** preset 执行层：参数收敛（含 data JSON 解析）→ POST /preset → 文本渲染。 */
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, leasedText } from '../../host/http.js'
+import { backendErrorText, backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { formatPreset } from './response.js'
@@ -22,7 +22,7 @@ export async function executePreset(port: number, args: Record<string, unknown>)
   if (!r || r.ok !== true)
     return toolError(
       'backend_error',
-      'PRESET ' + op + ' 失败 · ' + redactSecrets(text(r.error || r.raw || 'unknown')),
+      'PRESET ' + op + ' 失败 · ' + redactSecrets(backendErrorText(r)),
       '核对 preset 数据与 op',
     )
   return { text: formatPreset(op, asRecord(r.result)) }

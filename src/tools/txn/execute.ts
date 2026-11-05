@@ -1,6 +1,6 @@
 /** txn 执行层：参数收敛 → POST /txn → 文本渲染。 */
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, leasedText } from '../../host/http.js'
+import { backendErrorText, backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { toolError } from '../errors.js'
 import { formatTxn } from './response.js'
@@ -21,7 +21,7 @@ export async function executeTxn(port: number, args: Record<string, unknown>): P
   if (!r || r.ok !== true)
     return toolError(
       'backend_error',
-      'TXN ' + op + ' 失败 · ' + text(r.error || r.raw || 'unknown'),
+      'TXN ' + op + ' 失败 · ' + backendErrorText(r),
       '用 blender_rt_txn op=list 查看快照',
     )
   return { text: formatTxn(op, asRecord(r.result)) }

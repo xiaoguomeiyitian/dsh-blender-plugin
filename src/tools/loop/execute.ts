@@ -1,7 +1,7 @@
 /** loop 执行层：GUI timers 通道与无头 worker session 通道。 */
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendPost, leasedText } from '../../host/http.js'
+import { backendErrorText, backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { loopResultText, loopSessionError, loopSessionText } from './response.js'
@@ -31,7 +31,7 @@ async function loopViaSession(
   if (!st || st.ok !== true)
     return toolError(
       'backend_error',
-      'LOOP session 启动失败 · ' + text(st.error || st.raw || 'unknown'),
+      'LOOP session 启动失败 · ' + backendErrorText(st),
       '先 blender_rt_worker op=start 启动 worker，或改用 GUI 通道',
     )
   const code = buildSessionCode(op, args)
@@ -45,7 +45,7 @@ async function loopViaSession(
   if (!r || r.ok !== true)
     return toolError(
       'backend_error',
-      loopSessionError(op, nm, redactSecrets(text(r.error || rr.error || 'unknown'))),
+      loopSessionError(op, nm, redactSecrets(backendErrorText(r))),
       '用 blender_rt_loop op=status 检查会话；必要时重新 op=start',
     )
   return { text: loopSessionText(op, nm, rr.result || rr || r) }
@@ -116,7 +116,7 @@ async function loopGui(port: number, args: Record<string, unknown>, op: string):
   if (!r || r.ok !== true)
     return toolError(
       'backend_error',
-      'LOOP ' + op + ' 失败 · ' + text(r.error || r.raw || 'unknown'),
+      'LOOP ' + op + ' 失败 · ' + backendErrorText(r),
       '用 blender_rt_loop op=status 检查会话',
     )
   return { text: loopResultText(op, r.result) }

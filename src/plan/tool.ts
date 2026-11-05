@@ -2,7 +2,7 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from '../tools/schema-diagnostic.js'
 import { BACKEND_HINT, PLUGIN_VERSION, T } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendPost, jsonPayload, leasedText } from '../host/http.js'
+import { backendErrorText, backendPost, jsonPayload, leasedText } from '../host/http.js'
 import { renderStructured } from '../ui/cards.js'
 import { finishPlanResponse, planViaWorker } from './headless-target.js'
 import { toolError } from '../tools/errors.js'
@@ -88,7 +88,7 @@ export function registerPlan(ctx: HostContext, port: number): void {
                   'PLAN ' +
                     op +
                     ' 无头执行失败 · ' +
-                    text(prRec.error || 'unknown') +
+                    backendErrorText(prRec) +
                     (prRec.hint ? String.fromCharCode(10) + text(prRec.hint) : ''),
                   '先 blender_rt_worker(op="start", name="…", preload="…")，或传 session="auto"',
                 )
@@ -101,7 +101,7 @@ export function registerPlan(ctx: HostContext, port: number): void {
             if (!r || r.ok !== true)
               return toolError(
                 'backend_error',
-                'PLAN ' + op + ' 失败 · ' + text(r.error || r.raw || 'unknown'),
+                'PLAN ' + op + ' 失败 · ' + backendErrorText(r),
                 '检查后端 /plan 路由与 op 名；不确定先 op=catalog',
               )
             return await finishPlanResponse(ctx, op, r.result, argsIn)

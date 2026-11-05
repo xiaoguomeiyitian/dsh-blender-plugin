@@ -1,6 +1,6 @@
 /** headless 回执信封：等待窗口控制 + 结构化信封 + promoted 回执。 */
 import { HOLDER } from '../../constants.js'
-import { backendJson, backendPost, leasedText } from '../../host/http.js'
+import { backendErrorText, backendJson, backendPost, leasedText } from '../../host/http.js'
 import { clipText, safeStringify } from '../../ui/cards.js'
 import { toolError } from '../../tools/errors.js'
 import { asRecord, isRecord, text } from '../../contracts/dynamic.js'
@@ -45,7 +45,7 @@ export async function startJobThenMaybeWait(
   if (jr.error)
     return toolError(
       'backend_error',
-      'HEADLESS 转作业层失败 · ' + text(jr.error || jr.raw || 'unknown'),
+      'HEADLESS 转作业层失败 · ' + backendErrorText(jr),
       '检查后端 /headless 路由；或改用 blender_rt_job op=list 查看是否已建作业',
     ) as unknown as Record<string, unknown>
   // 后端 /headless 的回包是 {ok, ms, result:<引擎回执>} —— jobId 在 result 里

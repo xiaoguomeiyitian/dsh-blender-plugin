@@ -2,7 +2,7 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from './schema-diagnostic.js'
 import { T, BACKEND_HINT } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendPost, leasedText } from '../host/http.js'
+import { backendErrorText, backendPost, leasedText } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { text } from '../contracts/dynamic.js'
@@ -58,7 +58,7 @@ export function registerCmd(ctx: HostContext, port: number): void {
             if (!r || r.ok !== true)
               return toolError(
                 'backend_error',
-                'CMD ' + name + ' 失败 · ' + text(r.error || r.raw || 'unknown'),
+                'CMD ' + name + ' 失败 · ' + backendErrorText(r),
                 '用 blender_rt_commands 核对命令名与参数',
               )
             const payload = JSON.stringify(r.result)

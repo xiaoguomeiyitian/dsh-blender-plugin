@@ -2,7 +2,13 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend, sleep } from '../../host/backend/index.js'
-import { actErrorText, backendPost, fetchFrame, leasedText } from '../../host/http.js'
+import {
+  actErrorText,
+  backendErrorText,
+  backendPost,
+  fetchFrame,
+  leasedText,
+} from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { guiWatchResponse, workerWatchResponse } from './response.js'
@@ -88,7 +94,7 @@ async function watchViaWorker(
     if (r.ok !== true || res.ok !== true)
       return toolError(
         'backend_error',
-        'WATCH 无头失败 · ' + text(r.error || res.error || 'unknown'),
+        'WATCH 无头失败 · ' + backendErrorText(r),
         '先 blender_rt_worker op=start 启动 worker，或改用 GUI 通道',
       )
     return await workerWatchResponse(ctx, res)
