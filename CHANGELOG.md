@@ -1,10 +1,12 @@
 # CHANGELOG — dsh-blender-plugin
 
-## 未发布（移植 v2.6.2 fork delta → v3.0.5）
+## 未发布（上游 v3.0.6 之后的本 fork delta）
 
-> 分支 `port/v3.0.5-delta`。能力面不变：模型工具仍 **15 个**，plan catalog 仍
-> **34 family / 228 op**，addon 仍是 **38 命令 / protocol 11**（addon 未改动）。
-> 下面每条都注明在 v3 的落点；"上游已吸收"= v3.0.5 已有等价实现，不再重复。
+> 分支 `deploy/v3.0.5-delta`：**已并入上游 v3.0.6**（路由单源化 / 诊断说真话 /
+> `blender_exe_missing` 等，见下方 v3.0.6 段），并保留本 fork 的独有 delta
+> （实例路由、跨容器文件回读、统一错误文案、Blender 5.x 支持、GUI 首帧预热）。
+> 能力面不变：模型工具仍 **15 个**，plan catalog 仍 **34 family / 228 op**，
+> addon 仍是 **38 命令 / protocol 11**。
 
 ### 新增：正式支持 Blender 5.x
 
@@ -123,6 +125,49 @@
 - **AGENTS.md 的"改 src 必须重建 lib + build-local.sh"段**：v3 `§5 Definition of done`
   已有等价约束（"lib/ is regenerated, never hand-edited"），且 fork 那段是指向它自带
   `build-local.sh` 的推荐，v3 无该脚本。
+## Unreleased
+
+- 行为修复（Web 客户端）：Blender 选中写入草稿成功后不再弹提示，失败提示改用自动消失的 error Toast（约 4 秒）。此前成功后调用 `notify("info", …)` 显示"已接收 Blender 选中（已加入草稿，未发送）"，而 DSH 把 `info` 渲染成输入栏里的常驻 banner（无清除接口，发送消息后仍不消失），于是横幅一旦出现就一直在（后续选中只替换文案，不会清掉）。现成功静默（草稿出现文本即是反馈），桥轮询失败首帧改用 `notify("error", …)`。回归：`tests/integration/js/client-selection-notice.test.ts`；客户端契约文档中该步骤同步改写。
+- 行为修复：`qc_compare_auto` / `qc_align_iou` 现在能真正分派。此前 catalog 声明了这两个 op，但 Python 侧 `qc_ops()` 没有对应键，调用返回 `unknown qc op`；现补 `compare_auto` 分派与 `qc_align_iou` 的路径级封装（掩膜 bbox 紧裁后算 IoU，只返回 JSON 标量）。`config/contracts.json` 的 qc `catalogExtras` 随之删除，parity 测试与 native E2E 覆盖分派成功。`qc_help` 补 `compare_auto` / `align_iou` 的签名说明，`qc_align_iou` 缺路径参数时返回明确错误，不再在 `qc_load(None)` 上失败。
+- 无 API / 协议 / 工具计数变化（15 tools / 34 family / 228 op / addon 1.11 / protocol 11）。
+
+### 治理
+
+- 例外有主化：addon 8 个命令模块对 `integrations/*_client.py` 私有 helper 的 41 处跨包导入登记为 `python-private-import`（`config/exceptions.json`，owner `addon-integrations`，reviewBy 2027-06-30），并由纯 ast 契约测试逐对校验；`config/doc-links-baseline.json` 的 7 条冻结失效引用补 `review {owner, reviewBy, reason}`，`check:doc-paths -- --enforce` 拒绝无主/过期的 baseline。
+- 注释去叙事：47 个重构期文件的注释（45 个文件头 + 2 个非头部）去掉“从 X 拆出 / 行为冻结”叙事、改为职责描述；`addon/dsh_blender_bridge/protocol.py` 删除指向不存在的 `addon_manager` / `trajectory` 的同步注释；注释约定写入 `docs/architecture.md`。
+- 流程收尾：`converge-3-0-terminal-state` 归档到 `openspec/changes/archive/`；清理 19 个干净的历史 worktree（保留 3 个有未提交改动的），`.dsh/`、`.dsh-ops/`、`.review-tmp/` 加入 `.gitignore`；`.review-tmp/` 同时加入 plan-ID 扫描的跳过目录，三项一并加入 ESLint 忽略配置。
+
+## v3.0.6（2026-11-05）—— 首调失败修复与重构终态收口（治理 + 开发环境）
+
+- Windows 自动探测补 Steam 库：扫描 `%ProgramFiles%\Steam`、`%ProgramFiles(x86)%\Steam`、`%ProgramW6432%\Steam` 与 `{C,D,E,F}\{Program Files\Steam, Program Files (x86)\Steam, Steam, SteamLibrary}`，并解析 `steamapps/libraryfolders.vdf` 中的其它库；命中来源记 `auto:steam`。这是「Blender 装在 Steam 库里、首调直接失败」的根因。
+- `blender_rt_worker(op="start")` / `blender_rt_job(op="start")` 在 spawn 前预检 blender.exe：为空时立即返回结构化 `blender_exe_missing`（含 `DSH_BLENDER_EXE` / `dsh-blender.config.json` / Steam 路径示例），不再抛 Node 的 `TypeError: The "file" argument must be of type string`。
+- `blender_viewport(op="start")` 不再把「9877 后端进程在」当成「Blender/addon 通道可用」：/health 通后再做有界 /status，区分「后端在 + addon/bpy 可用」与「后端在、addon/bpy 未响应」。
+- `op="doctor"` 与 `GET /status` 说真话：9876 TCP 通但 addon 在预算内没回 bpy 往返时，返回 `kind: "addon-unresponsive"`（不再落成 `blender-unreachable`）；addon 明确回了错误（非超时，如「AI 操作已暂停」）时归因 `kind: "addon-error"`，不再写成 `main-thread-busy`；/status 透出 `addonError`，宿主超时报 `backend_timeout` 而不是 `backend_unreachable`。
+- 预算分层并保持倒挂关系：删除启动阶段未 await、占用串行 addon 队列头的 `get_addon_info` 探测后，/status 回调到 5s、doctor 回调到 4s（实测冷/热调用相差 <2s，此前只能取 3.5s/3s）；/commands 的 FLAGS 15s + 5 个集成各 3s（每次失败还会串一次 ~2.5s 诊断，最坏 ≈42.5s < 客户端 45s < 宿主静态截止 60s）；`blender_rt_commands` 客户端预算改为 45s，先于宿主 deadline 收口；`op="start"` 的 /status 探测预算提到 12s（覆盖后端刚起首调），不再让宿主先 abort、模型看不到 addonError。
+- `blender_rt_commands` 在 socket 级失败时返回 `addon_unreachable`，next_action 指向 N 面板 Connect + 有界 `op=doctor`，不再指向会阻塞的 `op=status`。
+- addon 面板文案改为「Bridge listening / Bridge server stopped」等，不再暗示它连接了 MCP server。
+- `blender_viewport(op="status")` 的失败分类修正：连接级失败（ETIMEDOUT / connect timeout / ECONNREFUSED 等）统一报 `backend_unreachable`，不再误报 `backend_timeout`；Blender 正在渲染时单列 `busy_render` 并指向 `render_wait`，不再归成 addon 坏。`errorText` 的 cause 链加深度/环保护。
+- `/doctor` 在 addon 明确回错时优先展示 `addon.kind/summary/fix`（不再读历史 `metrics.lastDiagnosis`）；`BUSY_RENDER` 的修法指向等待渲染。
+- `/worker` 只透出 `blender_exe_missing` 这一种约定 code；Node 内部错误码（`ERR_INVALID_ARG_TYPE` 等）不再变成模型可见的结构化错误码。
+- `blender_rt_headless` 现在真的把运行时的 `blender_exe_missing` 透出（含配置指引），与文档一致；此前一律吞成 `backend_error`。
+- Windows Steam 探测补注册表 `SteamPath`（HKCU / HKLM WOW6432Node）与 G–H 盘常见根。
+- 回归测试加固：`doctor-bounded` 先预热再计时（预算 12s，稳态 6–9s）、补 macOS/Linux 探测用例与 HKCU SteamPath 用例、worker 源码顺序断言改成正则。
+- **行为变更（唯一一处）**：`blender_rt_plan` 在无头 worker 会话（`session=...`）下调用 `qc_render_*` 现在路由到 `dsh_qc_render_api` 并预载 `qc_render`；此前 worker 路径命中 `dsh_qc_api` 的 `render_views` 转接函数，而转接依赖 GUI 侧才有的 `K.dsh_qc_render_api`，worker 只 preload `qc,imgtools` 时必然失败（GUI 路径行为不变）。
+- 无 API / 协议 / 工具计数变化（15 tools / 34 family / 228 op / addon 1.11 / protocol 11）。
+
+### 治理：重构终态收口
+
+- 路由与契约单一真源：新增 `config/routing.json` 与 `scripts/gen-routes.mjs`，生成 `src/plan/routes.generated.ts` 与 `runtime/core/dispatcher/routes.generated.ts`，`npm run check:routes` 校验生成物与源数据一致；`config/contracts.json` 把 catalog 的 228 op 与 Python dispatch 字面表对齐，新增 AST parity 测试（`qc_compare_auto` / `qc_align_iou` 是已知 catalog-only 漂移，已登记待独立修复）。
+- 例外与预算登记：新增 `config/exceptions.json`（路径级例外，含 reviewBy 过期检查）与 `config/function-budget-allowlist.json`（106 个 80–120 行函数按 8 类登记，reviewBy 2027-06-30）；`check:exceptions` 接入 `npm run lint`；>120 行函数保持零例外。
+- addon 命令真源：handshake capabilities 由 `command_registry.COMMAND_NAMES` 派生（不再硬编码 16 个）；host catalog 与 addon registry 双向 parity；口径统一为 38 registered + ping = 39 wire。
+- public facade 收口：`runtime/engine.ts` 88 → 22 个导出（删除 38 个 py `*_PATH` 与其余 facade-dead），`config/facades.json` 登记两个公共 facade 及其消费者，`check:no-shims` 拒绝未登记导出；删除 `src/host/backend/port-holders.ts`、`engine-api/frame.ts` 纯转发、`qc_impl/api.py` 的 `exec(compile(...))` 二次加载，`runtime/recover.ts` 并入 `execution/ledger/recover.ts`；addon 凭据改为单一所有者（add-on preferences + session override + `DSHBB_*`/`BLENDERMCP_*` env 后备），删除 Scene 镜像属性；删除 `detectBlenderExe` 再导出。
+- 死代码与打包：删除 5 个未使用导出、重复的 `ReceiptContext`、addon `import_model_files` 死链、未使用的 compat 函数、永不存在的 `runtime/ext/pkg.tgz` 打包条目，并清理工作区 400+ 个陈旧 `.pyc`。
+- 文档终态：3 篇被取代文档归档到 `docs/archive/`；SKILL 标题重编号；曲面算法收敛为单一来源；addon 用户文案 MCP/Claude → Bridge（保留上游署名与 `BLENDERMCP_*` 兼容）；新增 `check:plan-ids` 与 `check:doc-paths` 的 warn→enforce 门禁，清理重构计划编号并修复文档链接/入链；`BEHAVIOR_MATRIX` 行号改为文件 + 符号并由门禁校验；SECURITY 的凭据说明改为准确描述。
+
+### 开发环境
+
+- 新增 `npm run setup:dev`：自动发现 Python（`PYTHON` → `python` → `python3` → Windows `py -3`，含坏 Store alias 的兜底）、创建/复用 `.venv`、安装 `requirements-dev.txt` + `requirements-typecheck.txt`、仅在缺失时执行 `npm ci --legacy-peer-deps`，支持 `--check` / `--force`，幂等可重复执行；`.github/workflows/pr.yml` 与 `release.yml` 复用同一脚本，不再各自内联 venv 步骤。
+- `CONTRIBUTING` / `README`（中英）与 `scripts/README` 收敛到同一条开发环境命令。
 
 ## v3.0.5（2026-11-04）—— 修复源码注入 __file__ 缺失
 

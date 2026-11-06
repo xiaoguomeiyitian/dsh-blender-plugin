@@ -21,12 +21,16 @@ export function montageCallArgs(payload?: unknown): Record<string, unknown> {
 }
 
 /** montage 的 Python 调用体：结果必须 **JSON 化**（dict 不能与 str 相加，否则报
- * "can only concatenate str (not 'dict') to str"）。 */
-export function montageCallCode(payload: unknown): string {
+ * "can only concatenate str (not 'dict') to str"）。
+ *
+ * ⚠️ `api` = Python 侧 API 名（默认 `dsh_montage_api`）。路由单源化
+ *    （`config/routing.json`）后由 `route.api` 提供 ⇒ 默认值只作兜底。
+ */
+export function montageCallCode(payload: unknown, api = 'dsh_montage_api'): string {
   const q = montageCallArgs(payload)
   return [
     'import json as _json',
     'P = _json.loads(' + JSON.stringify(JSON.stringify(q)) + ')',
-    'print("LOOP " + _json.dumps(K.dsh_montage_api["montage"](**P), ensure_ascii=False, default=str))',
+    'print("LOOP " + _json.dumps(K.' + api + '["montage"](**P), ensure_ascii=False, default=str))',
   ].join('\n')
 }

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Split from qc.py; behavior preserved by the facade."""
+"""QC 度量与帮助：qc_compare_auto、自检/鲁棒性/掩膜扫描与 qc_help 文案。"""
 from .common import *  # noqa: F401,F403
 from .load import _hstack, _overlay_bytes, _to_u8, qc_crop, qc_load, qc_mask, qc_profile, qc_profile_diff
 from .align import _align_search, _iou_pair, _scale_bool, _scale_rgb, qc_align_rotate, qc_mask_auto, qc_metrics
@@ -36,7 +36,7 @@ def qc_compare_auto(ref_path, ref_box=None, render_path=None, label="qc", out_di
     os.makedirs(d, exist_ok=True)
     ref_srgb, ref_alpha = qc_load(ref_path)
     ref = qc_crop(ref_srgb, ref_box) if ref_box else ref_srgb
-    # v0.8.10（C3 口径统一）：ref 也要走 alpha 判定 —— 旧版 ref 用 Otsu、render 用 alpha，
+    # v0.8.10（口径统一）：ref 也要走 alpha 判定 —— 旧版 ref 用 Otsu、render 用 alpha，
     # 同一张图自比只有 0.565（外部反馈里"同一轮廓被掩膜口径压到 0.62 假低分"就是这个）
     rm, rminfo = qc_mask_auto(ref, ref_alpha) if mask_mode == "auto" else (qc_mask(ref, sat, v), {"source": "satv"})
     # v0.8.3：auto 掩膜适用性检查 —— 前景占比异常（满构图海报 / 几乎无前景）时回落阈值口径并显式标注
@@ -60,7 +60,7 @@ def qc_compare_auto(ref_path, ref_box=None, render_path=None, label="qc", out_di
         m["scale_base"] = base.get("base_scale")
         m["shift_px"] = base.get("shift")
         m["canvas"] = base["canvas"]
-        # v0.8.10（C3）：可选角度细化（默认关；开了就报 rotation_deg 与增益）
+        # v0.8.10：可选角度细化（默认关；开了就报 rotation_deg 与增益）
         if rotate:
             try:
                 _rot = qc_align_rotate(rm, rn, work=work)
@@ -95,7 +95,7 @@ def qc_compare_auto(ref_path, ref_box=None, render_path=None, label="qc", out_di
             warn.append("对齐搜索把尺度拉开 %.1f%%：可能是在补偿取景/裁切差，也可能模型比例确实不对 —— 请结合 iou_fixed 一起看" % ((drift - 1.0) * 100.0))
     if (m.get("iou_search_gain") or 0) > 0.05:
         warn.append("搜索对齐比固定对齐高 %.3f：单看 IoU 会偏乐观，建议报告里两个都给" % (float(m["iou"]) - float(m["iou_fixed"])))
-    # ---- v0.8.10（B3）「太漂亮」守卫：IoU 恒等 1.0000 / 面积完全相同 → 疑似同一张图或参数没生效
+    # ---- v0.8.10「太漂亮」守卫：IoU 恒等 1.0000 / 面积完全相同 → 疑似同一张图或参数没生效
     try:
         _iou = float(m.get("iou") or 0)
         _a, _b = m.get("a_px"), m.get("b_px")
@@ -203,6 +203,8 @@ def qc_help():
                 "iou": "iou(a_mask, b_mask) → {iou,inter,union,a_px,b_px}",
                 "profile": "profile(mask, bins=24) → 逐层宽度", "profile_diff": "profile_diff(pa,pb)",
                 "compare": "compare(ref_path, ref_box, render_path, label) → iou+剖面差+两张对照图",
+                "compare_auto": "compare_auto(ref_path, ref_box=None, render_path=None, label) → 自适应掩膜 + 对齐搜索的比对（推荐默认）",
+                "align_iou": "align_iou(ref_path, ref_box=None, render_path=None) → 掩膜 bbox 紧裁后算 IoU（返回 JSON 标量）",
                 "resize_mask": "resize_mask(mask,h,w)", "write_png": "write_png(path,w,h,rgb_bytes)"},
         "measures": {"aabb_err": "aabb_err(obj_name, target_size) → 包围盒尺寸误差（内环 score 用）",
                      "silhouette_iou": "silhouette_iou(view_spec, ref_path, ref_box) → 1-IoU（越小越好；会出图再比对）",
@@ -211,5 +213,5 @@ def qc_help():
     })
 
 
-# ---------------------------------------------------------------- 内环 measure 预置（P2）
+# ---------------------------------------------------------------- 内环 measure 预置
 

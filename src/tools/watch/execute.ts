@@ -2,17 +2,13 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend, sleep } from '../../host/backend/index.js'
-import {
-  actErrorText,
-  backendErrorText,
-  backendPost,
-  fetchFrame,
-  leasedText,
-} from '../../host/http.js'
+import { backendPost, fetchFrame, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { guiWatchResponse, workerWatchResponse } from './response.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
+import { backendErrorText } from './../../host/error-text.js'
+import { actErrorText } from './../../host/error-text.js'
 
 export async function executeWatch(
   ctx: HostContext,

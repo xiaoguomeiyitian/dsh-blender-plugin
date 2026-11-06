@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "EXC-FILE-BUDGET-CATALOG-DATA",
+      "kind": "file-budget",
+      "path": "runtime/catalog/data.ts",
+      "reason": "Plan catalog data table (34 families / 228 ops) is pure data, not logic: it keeps the when/not/sk metadata and op lists human-readable in one file, so it carries the documented 600-line budget exemption. This replaces the removed runtime/catalog.ts ghost entry; the budget gate reads this registry instead of an inline allowlist.",
+      "owner": "catalog",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-SINGLE-LINE-REEXPORT-CATALOG-BARREL",
+      "kind": "single-line-reexport",
+      "path": "runtime/catalog/index.ts",
+      "reason": "Aggregation barrel for the catalog domain (data / tools / commands / logic). runtime/engine.ts and runtime/ internal callers need one stable import path per domain; the barrel holds no logic of its own, and the public facade registry (config/facades.json) records the four exports actually consumed through it.",
+      "owner": "s2-facade",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-SINGLE-LINE-REEXPORT-RUNTIME-BRIDGE",
+      "kind": "single-line-reexport",
+      "path": "src/host/runtime-bridge.ts",
+      "reason": "The single documented src/ -> lib/runtime boundary: host-side code imports the built runtime entry points through this one file instead of scattering lib/ paths. Keeping the bridge as one re-export file is the boundary convention recorded in docs/architecture.md.",
+      "owner": "s2-facade",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-SINGLE-LINE-REEXPORT-HEADLESS-RECEIPTS",
+      "kind": "single-line-reexport",
+      "path": "src/headless/receipts/index.ts",
+      "reason": "Split barrel for the headless receipt helpers (split / normalize / format). Callers and tests import the receipt surface from this single path; the module files keep the implementation and unit tests target them directly.",
+      "owner": "s2-facade",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-ASSETS",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/assets_polyhaven.py",
+      "detail": "from ..integrations.polyhaven_client import _polyhaven_api_get, _polyhaven_asset_record, _polyhaven_asset_url, _polyhaven_keyword_match, _polyhaven_preview_url, _polyhaven_search, _polyhaven_summarize_asset, _polyhaven_taxonomy, _polyhaven_valid_slug",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-MATERIAL-COMMANDS",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/material.py",
+      "detail": "from ..integrations.polyhaven_client import _polyhaven_asset_url, _polyhaven_authors, _polyhaven_dimensions_mm, _polyhaven_mapping_node, _polyhaven_resolution_rank, _polyhaven_tag, _polyhaven_valid_slug",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-DOWNLOAD",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polyhaven/download.py",
+      "detail": "from ...integrations.polyhaven_client import _polyhaven_api_get, _polyhaven_valid_slug",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-HDRI",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polyhaven/hdri.py",
+      "detail": "from ...integrations.polyhaven_client import _polyhaven_asset_url, _polyhaven_authors, _polyhaven_available, _polyhaven_download, _polyhaven_tag",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-MATERIAL",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polyhaven/material.py",
+      "detail": "from ...integrations.polyhaven_client import _polyhaven_asset_url, _polyhaven_authors, _polyhaven_available, _polyhaven_dimensions_mm, _polyhaven_download, _polyhaven_mapping_node, _polyhaven_select_texture_maps, _polyhaven_set_colorspace, _polyhaven_tag",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYHAVEN-MODEL",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polyhaven/model.py",
+      "detail": "from ...integrations.polyhaven_client import _polyhaven_asset_url, _polyhaven_authors, _polyhaven_available, _polyhaven_blend_version, _polyhaven_download, _polyhaven_tag",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYPIZZA-CLIENT",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polypizza/client.py",
+      "detail": "from ...integrations.polypizza_client import _polypizza_filter_params, _polypizza_summarize_model",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    },
+    {
+      "id": "EXC-PRIVATE-IMPORT-POLYPIZZA-DOWNLOAD",
+      "kind": "python-private-import",
+      "path": "addon/dsh_blender_bridge/commands/polypizza/download.py",
+      "detail": "from ...integrations.polypizza_client import _polypizza_cdn_error",
+      "reason": "Cross-package reuse of private helpers from integrations/*_client.py predates the addon package split. The names stay private until those modules are next touched; the pytest private-import contract ties this registry entry to the real import graph so the entry cannot go stale.",
+      "owner": "addon-integrations",
+      "reviewBy": "2027-06-30"
+    }
+  ]
+}

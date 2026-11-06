@@ -56,24 +56,8 @@ export async function backendJson(
  *    的失败都走同一个「路由把引擎返回包进 result」的形状 ⇒ **所有工具层取失败
  *    文案都必须走这个函数**，否则同一个坑会在每个工具上各复现一次。
  */
-export function backendErrorText(r: unknown, fallback = 'unknown'): string {
-  if (!isRecord(r)) return fallback
-  const top = r.error != null ? text(r.error) : ''
-  const res = isRecord(r.result) ? r.result : null
-  const inner = res && res.error != null ? text(res.error) : ''
-  const detail = r.detail != null ? text(r.detail) : ''
-  const sig = res && res.sig_hint != null ? text(res.sig_hint) : ''
-  const msg = r.message != null ? text(r.message) : ''
-  const raw = r.raw != null ? text(r.raw) : ''
-  const hint = sig ? '（签名：' + sig.slice(0, 400) + '）' : ''
-  return top || inner + hint || detail || msg || raw || fallback
-}
-
-/**
- * 旧名（/act 语境）保留为别名 —— 已有契约测试与外部调用仍按 actErrorText 引用。
- * @deprecated 新代码请用 {@link backendErrorText}（它对所有工具通用）。
- */
-export const actErrorText = backendErrorText
+// 失败文案取值已独立到 src/host/error-text.ts（不被工具层测试的 http.js mock 屏蔽）⇒ 这里只做再导出。
+export { backendErrorText, actErrorText } from './error-text.js'
 
 export function parseBackendBody(body: unknown): Record<string, unknown> {
   const t = String(body == null ? '' : body)
@@ -125,10 +109,10 @@ export function parseBackendBody(body: unknown): Record<string, unknown> {
 /**
  * 写操作统一走它：自动带 holder（租约门禁用），并保留 HTTP 状态码便于识别 409。
  *
- * v0.9.3（D1，关键）：**计时器必须活到 body 读完**。
+ * v0.9.3（关键）：**计时器必须活到 body 读完**。
  * 旧版是 withTimeout(fetch) → fetch 在**收到响应头**时就 resolve（流式路由 /headless 立刻发头 + 每 15 s 心跳），
  * 于是超时预算只覆盖「等响应头」，随后的 r.text() 无限期等下去 —— 客户端等待窗口形同虚设，
- * 外层 run_code 的 deadline 一到就整段丢结果（正是 D1 报的现象）。
+ * 外层 run_code 的 deadline 一到就整段丢结果（正是 报的现象）。
  * 现在把 text() 也放进同一个 AbortController：到点 abort → fetch / body 读取一起抛 AbortError。
  */
 export async function backendPost(

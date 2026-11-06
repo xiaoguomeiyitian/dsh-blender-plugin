@@ -1,11 +1,12 @@
 /** loop 执行层：GUI timers 通道与无头 worker session 通道。 */
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendErrorText, backendPost, leasedText } from '../../host/http.js'
+import { backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { redactSecrets, toolError } from '../errors.js'
 import { loopResultText, loopSessionError, loopSessionText } from './response.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
+import { backendErrorText } from './../../host/error-text.js'
 
 export async function executeLoop(port: number, args: Record<string, unknown>): Promise<unknown> {
   if (!(await ensureBackend(port)))

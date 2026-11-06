@@ -36,8 +36,8 @@ window.__ModuleLoader__.load({
     var DEFAULT_BACKEND = 'http://127.0.0.1:9877'
     /** localStorage 覆盖键（最高优先级的用户侧覆盖）。 */
     var LS_BACKEND_KEY = 'dsh-blender-plugin:backend'
-    /** v2.3 §S2：Blender 原生选中轮询间隔（会话可见时才轮询）。 */
-    var SELECTION_POLL_MS = 100 // v2.6.1 性能实测：1200→100ms，端到端 p50 993→156ms（本机回环，见契约 §S3.2）
+    /** v2.3：Blender 原生选中轮询间隔（会话可见时才轮询）。 */
+    var SELECTION_POLL_MS = 100 // v2.6.1 性能实测：1200→100ms，端到端 p50 993→156ms（本机回环，见契约「选中轮询」）
     /** v2.3：草稿文本里最多列多少个对象名（几百个零件时收敛成摘要，别刷屏）。 */
     var SELECTION_DRAFT_NAME_LIMIT = 24
     /** v2.4：子元素（顶点/边/面/骨骼）草稿里最多列多少个索引/名字。 */
@@ -212,14 +212,16 @@ window.__ModuleLoader__.load({
       return { readable: false, draft: '' }
     }
 
-    /** 可用则 notify，不可用静默（契约 §2.4 第 5 步）。 */
-    function notifyInfo(deps, text) {
+    /**
+     * 失败提示：用 error 级，DSH 会渲染成自动消失的 Toast（约 4 秒，无关闭按钮）；不可用则静默。
+     * **不要用 info**：DSH 把 info 渲染成输入栏里的常驻 banner，没有清除接口，
+     * 发送消息后也不会消失（v2.3 的“已接收 Blender 选中”因此变成永久横幅）。
+     * 成功路径也不提示：草稿里出现文本本身就是反馈。
+     */
+    function notifyError(deps, text) {
       try {
         var f = deps && deps.fallbackInput
-        if (f && typeof f.notify === 'function') {
-          f.notify('info', text)
-          return
-        }
+        if (f && typeof f.notify === 'function') f.notify('error', text)
       } catch (e) {
         /* 静默 */
       }
@@ -227,7 +229,7 @@ window.__ModuleLoader__.load({
 
     //#endregion
 
-    //#region v2.3 · Blender 原生选中 → DSH 草稿（契约 v2.3 增补 §S2/§S3）
+    //#region v2.3 · Blender 原生选中 → DSH 草稿（契约 v2.3 增补）
     /**
      * 把 addon 推来的 selection payload 折成一条草稿文本。
      * 空选中（names 为空）返回 null —— 调用方据此跳过插入。
@@ -387,6 +389,7 @@ window.__ModuleLoader__.load({
     /**
      * 把选中写进当前会话草稿（**不自动发送**）。
      * 优先 inputActions.insertText（可追加），否则退回 SessionInput.setDraft（仅当草稿为空）。
+     * 成功不弹提示（草稿文本可见）；失败由调用方用 notifyError 报 error 级 Toast。
      * @returns {Promise<{ok:boolean, how?:string, reason?:string, text?:string}>}
      */
     async function applySelectionToDraft(deps, payload) {
@@ -408,7 +411,6 @@ window.__ModuleLoader__.load({
           }
         }
         if (!wrote) return { ok: false, reason: '文本插入被拒（草稿正在变或已锁定）', text: text }
-        notifyInfo(deps, '已接收 Blender 选中（已加入草稿，未发送）')
         return { ok: true, how: 'actions', text: text }
       }
       // 备用通道只有 setDraft（整体替换）→ 只在"读得到且为空"时才写，绝不覆盖用户内容
@@ -421,7 +423,6 @@ window.__ModuleLoader__.load({
       } catch (e) {
         return { ok: false, reason: '文本写入失败：' + errText(e), text: text }
       }
-      notifyInfo(deps, '已接收 Blender 选中（已加入草稿，未发送）')
       return { ok: true, how: 'fallback', text: text }
     }
 
@@ -500,7 +501,7 @@ window.__ModuleLoader__.load({
                     // 连续失败 3 次才消费掉并在回执里记下原因，避免无限重试。
                     failCountRef.current += 1
                     if (failCountRef.current === 1) {
-                      notifyInfo(
+                      notifyError(
                         { fallbackInput: fallbackRef.current },
                         'Blender 选中未写入草稿：' + String(out.reason || 'unknown'),
                       )
@@ -736,6 +737,7 @@ window.__ModuleLoader__.load({
       selectionMessageText: selectionMessageText,
       subSelectionText: subSelectionText,
       applySelectionToDraft: applySelectionToDraft,
+      notifyError: notifyError,
       makeSelectionBridge: makeSelectionBridge,
     }
     return module.exports

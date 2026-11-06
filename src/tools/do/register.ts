@@ -17,9 +17,9 @@ function buildDoTool(ctx: HostContext, port: number) {
       ' 异常也会回传 partial stdout / stderr / traceback（诊断信息不丢）；' +
       ' file 参数可跑工作区脚本（等价 K.run(path)）；' +
       ' 内置路径辅助 K.win_path / K.wsl_path / K.blend_path / K.out_dir；' +
-      ' ④ ms 即主线程占用，>1 s 提示改走 rt_headless / rt_worker。' +
-      ' GUI 不在线时自动降级持久无头会话（exec + Workbench see；不是 job/异步）。' +
-      '首次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个会话。',
+      ' ④ 返回的 ms 即**主线程占用**，>1 s 会提示改走 blender_rt_headless / blender_rt_worker。' +
+      ' **无头交互**：GUI 不在线或传 session 时，自动降级到持久无头会话（exec + Workbench see，同一 worker 热路径；不是 job/异步）。' +
+      '第一次会冷启动 worker，之后每步 ~50–150ms；session 名固定即复用同一个 Blender 会话。',
     parameters: {
       instance: { type: 'string', description: '实例 ID（默认本会话独占）' },
       code: {

@@ -2,12 +2,13 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from './schema-diagnostic.js'
 import { T, BACKEND_HINT } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendErrorText, backendPost, jsonPayload, leasedText } from '../host/http.js'
+import { backendPost, jsonPayload, leasedText } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
 import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
+import { backendErrorText } from './../host/error-text.js'
 
 export function registerOpt(ctx: HostContext, port: number): void {
   ctx.effect(

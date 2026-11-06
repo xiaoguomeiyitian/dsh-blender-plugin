@@ -3,7 +3,7 @@ import { objArg } from './deps.js'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
 import { parseBodyPayload } from '../response.js'
-// HTTP 路由 /commands：命令清单 / 透传（T7）
+// HTTP 路由 /commands：命令清单 / 透传
 export function createCommandsRoutes(E: HttpRouteDeps) {
   const { engine, json, leaseGate, readBody, stats } = E
   return {

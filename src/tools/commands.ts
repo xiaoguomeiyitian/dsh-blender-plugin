@@ -2,12 +2,13 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from './schema-diagnostic.js'
 import { T, BACKEND_HINT } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendErrorText, backendJson } from '../host/http.js'
+import { backendJson } from '../host/http.js'
 import { renderOne } from '../ui/cards.js'
 import { toolError } from './errors.js'
 import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
 import { asArray, asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
+import { backendErrorText } from './../host/error-text.js'
 
 export function registerCommands(ctx: HostContext, port: number): void {
   ctx.effect(
@@ -29,13 +30,26 @@ export function registerCommands(ctx: HostContext, port: number): void {
           async execute() {
             if (!(await ensureBackend(port)))
               return toolError('backend_unreachable', backendUnavailableText(port), BACKEND_HINT)
-            const r = await backendJson(port, '/commands', 120000)
-            if (!r || r.ok !== true)
+            // （上游 v3.0.6）：客户端预算必须 < timeoutMs:T.commands(60s) 的宿主静态截止，
+            // 否则 addon 慢时宿主先 abort，模型拿不到 /commands 的场景/集成回执。
+            // 后端侧最坏 ≈15 + 5×(3+2.5s 诊断)≈42.5s < 本预算 45s，整段回执能在客户端预算内返回。
+            const r = await backendJson(port, '/commands', 45000)
+            if (!r || r.ok !== true) {
+              const errText = backendErrorText(r)
+              // socket 级失败说明 addon 桥没连上：status 探针自身会阻塞约 20s 再指向 start，
+              // 形成死循环。改为有界的 Connect / doctor 指引。
+              if (/socket closed|ECONNRESET|EPIPE|ECONNREFUSED|connect timeout/i.test(errText))
+                return toolError(
+                  'addon_unreachable',
+                  'COMMANDS 失败 · ' + errText,
+                  '先切回 Blender，在 N 面板点 Connect（addon 监听 127.0.0.1:9876）；再跑 blender_viewport op=doctor 做有界体检，通过后重试本命令',
+                )
               return toolError(
                 'backend_error',
-                'COMMANDS 失败 · ' + backendErrorText(r),
-                '先 blender_viewport op=status 确认后端与 addon',
+                'COMMANDS 失败 · ' + errText,
+                '先跑 blender_viewport op=doctor 做有界体检（进程 / 端口 / addon 桥），按提示修复后重试本命令',
               )
+            }
             const disabled = asArray(r.disabled)
             const integrations = asRecord(r.integrations)
             const available = asArray(r.available)

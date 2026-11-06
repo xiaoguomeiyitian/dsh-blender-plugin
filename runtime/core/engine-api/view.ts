@@ -1,4 +1,4 @@
-// engine API：自定义视角捕获（F1.1 从 server-compat.ts 拆出）
+// engine API：自定义视角捕获
 import { VIEW_PNG_WIN } from '../../paths.js'
 import { extractTag } from '../output/index.js'
 import { KERNEL_BOOTSTRAP } from '../kernel/index.js'

@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
 import { parseBodyPayload } from '../response.js'
-// HTTP 路由 /perf：性能诊断（T7）
+// HTTP 路由 /perf：性能诊断
 export function createPerfRoutes(E: HttpRouteDeps) {
   const { engine, isReadOnly, json, leaseGate, readBody, stats } = E
   return {

@@ -1,10 +1,11 @@
 /** blender_rt_job 执行层：参数校验 → 后端调用 → 回执装配（行为与 v2.6.2 一致）。 */
 import { ensureBackend } from '../../host/backend/index.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
-import { backendErrorText, backendPost, leasedText, splitArgs } from '../../host/http.js'
+import { backendPost, leasedText, splitArgs } from '../../host/http.js'
 import { detectFileAlias } from '../../host/runtime-bridge.js'
 import { toolError } from '../errors.js'
 import { asRecord, optionalText, text } from '../../contracts/dynamic.js'
+import { backendErrorText } from './../../host/error-text.js'
 import {
   buildCollectRunning,
   buildFinalJob,
@@ -38,12 +39,24 @@ export async function executeJob(args: Record<string, unknown>, port: number): P
   const r = await backendPost(port, '/job', buildJobBody(op, args), budgetFor(op, args))
   const lt = leasedText(r)
   if (lt) return { text: lt }
-  if (!r || r.ok !== true)
+  if (!r || r.ok !== true) {
+    // fork delta：统一走 backendErrorText（真因可能嵌在 result.error 里 ⇒ 不再显示 unknown）
+    const errText = backendErrorText(r)
+    // blenderExe 为空的失败必须带自己的 code，否则模型看到的是泛化 backend_error、
+    // 拿不到「怎么配 blender.exe」的可执行指引。
+    if (text(r.code) === 'blender_exe_missing')
+      return toolError(
+        'blender_exe_missing',
+        'JOB ' + op + ' 失败 · ' + errText,
+        '设置 DSH_BLENDER_EXE 或 dsh-blender.config.json 的 blenderExe（Steam 版路径形如 <Steam>\\steamapps\\common\\Blender\\blender.exe）；改完重启 DSH，再 blender_rt_job op=start 重试',
+      )
     return toolError(
       'backend_error',
+      // fork delta：统一走 backendErrorText（不再显示 unknown）
       'JOB ' + op + ' 失败 · ' + backendErrorText(r),
       '用 blender_rt_job op=list 查看作业',
     )
+  }
   if (op === 'list') return renderJobList(r)
   return reportJob(op, asRecord(r.job))
 }
@@ -91,13 +104,13 @@ function buildJobBody(op: string, args: Record<string, unknown>): Record<string,
   return body
 }
 
-// v0.9.3（D6.2）：op=wait 会阻塞 → 给足 HTTP 预算（服务端默认 120 s/次，上限 600 s）
+// v0.9.3：op=wait 会阻塞 → 给足 HTTP 预算（服务端默认 120 s/次，上限 600 s）
 function budgetFor(op: string, args: Record<string, unknown>): number {
   return op === 'wait' ? Math.min(600000, Number(args.timeout_ms) || 120000) + 30000 : 60000
 }
 
 function reportJob(op: string, j: Record<string, unknown>): unknown {
-  // ---- 统一回执：run/job 同一套字段（D2）
+  // ---- 统一回执：run/job 同一套字段
   const ctx: JobCtx = {
     mode: 'job',
     jobId: text(j.id).indexOf('job-') === 0 ? text(j.id) : null,

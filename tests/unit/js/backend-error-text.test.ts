@@ -1,7 +1,7 @@
 // 回归自检：工具层取失败文案必须走 backendErrorText（issue #47 同族的**全工具**推广）。
 //
 // 背景（2026-11-05 真机验收，方案 B 窗口 v2.6.2 → v3.0.5）：
-//   A3 验收点「blender_rt_txn(op='revert') 少传 label 要报真因、不再显示 unknown」失败 ——
+//   验收点「blender_rt_txn(op='revert') 少传 label 要报真因、不再显示 unknown」失败 ——
 //   仍显示 "TXN revert 失败 · unknown"。
 //
 // 根因：引擎层把「参数不匹配」等失败**正常返回**成 {ok:false, error, sig_hint}，
@@ -78,7 +78,7 @@ describe('tool layer never reads only the top-level error', () => {
     expect(offenders).toEqual([])
   })
 
-  it('the txn tool (A3 acceptance point) uses the shared helper', () => {
+  it('the txn tool uses the shared helper', () => {
     const root = process.cwd()
     const src = readFileSync(path.join(root, 'src/tools/txn/execute.ts'), 'utf8')
     expect(src).toContain('backendErrorText')

@@ -17,6 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { isRecord, readString } from './core/json.js'
 import { errorMessage } from './core/json.js'
+import { detectBlenderExe } from './blender-detect.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 /**
@@ -119,7 +120,7 @@ export function winToWsl(p: unknown): string {
   if (IS_WIN || IS_MAC) return s
   const m = s.match(/^([A-Za-z]):[\\/](.*)$/)
   if (m) return '/mnt/' + m[1].toLowerCase() + '/' + m[2].replace(/\\/g, '/')
-  // v0.9.3（D4）：UNC 形态（\\wsl.localhost\<distro>\home\… 或 \\wsl$\…）→ WSL 可见的 /home/…
+  // v0.9.3：UNC 形态（\\wsl.localhost\<distro>\home\… 或 \\wsl$\…）→ WSL 可见的 /home/…
   // 旧版**原样返回** → 一旦 workDir 是 WSL 路径（wslToWin 先转成 UNC），台账 / results / trajectory
   // 就全落在一个 Node 打不开的 UNC 串上（实测：stale 对账查不到台账）。
   const u = s.match(/^\\\\wsl(?:\.localhost)?\\[^\\]+\\(.*)$/i)
@@ -148,9 +149,9 @@ export function wslToWin(p: unknown): string {
 }
 
 /**
- * v0.9.6（D3 · workDir 共享性自证）：这个 WSL 路径，Windows 侧的 Blender 到底看不看得见？
+ * v0.9.6（workDir 共享性自证）：这个 WSL 路径，Windows 侧的 Blender 到底看不看得见？
  *
- * 为什么需要它（现场实测 2026-09-26，租约自检 D2 失败）：
+ * 为什么需要它（现场实测 2026-09-26，租约自检失败）：
  *   自检把隔离工作目录设在 os.tmpdir()（WSL 的 /tmp）。Node 侧写脚本**成功**，
  *   但 Windows 的 blender.exe 打不开，报
  *     OSError: Python file "\\wsl.localhost\Ubuntu\tmp\…\dsh_headless_*.py" could not be opened
@@ -314,7 +315,7 @@ function resolveWorkDirRaw(): RawWorkDir {
 }
 
 /**
- * S9：workDir **可写性自证 + 回退**（现场：/mnt/d 变只读后，后端写不了自己的 status/ledger 就起不来，
+ * workDir **可写性自证 + 回退**（现场：/mnt/d 变只读后，后端写不了自己的 status/ledger 就起不来，
  * 而报错只说"看后端日志"，没有一句"你的 workDir 不可写"—— 40 分钟就这么没了）。
  * 顺序：配置/自动探测的候选 → 包内 tmp（工作区内，通常可写）→ OS tmpdir。回退必须显式留痕。
  */
@@ -362,88 +363,11 @@ function resolveWorkDir(): WorkDirInfo {
   })
 }
 
-function listDirSafe(p: string): string[] {
-  try {
-    return fs.readdirSync(p)
-  } catch (e) {
-    return []
-  }
-}
-
-/** 找 Blender：配置 → 常见安装位置 → PATH（Windows / WSL / macOS 都能用） */
-function detectBlenderExe(): { exe: string | null; from: string } {
-  const given = readString(process.env.DSH_BLENDER_EXE) || readString(FILE.cfg.blenderExe)
-  if (given) return { exe: given, from: 'config' }
-  const cands = []
-  if (IS_WIN) {
-    const pf = process.env.ProgramFiles || 'C:\\Program Files'
-    for (const d of listDirSafe(path.join(pf, 'Blender Foundation'))) {
-      if (/^Blender/i.test(d)) cands.push(path.join(pf, 'Blender Foundation', d, 'blender.exe'))
-    }
-    cands.push(path.join(pf, 'Blender Foundation', 'Blender', 'blender.exe'))
-  } else if (IS_MAC) {
-    // macOS：Blender 官方安装是 .app bundle，可执行文件在 Contents/MacOS 下。
-    // 支持 /Applications、~/Applications 与任意 /Volumes/* 下的版本化目录（Blender 4.2.app、Blender.app…）。
-    const homes = ['/Applications', path.join(os.homedir(), 'Applications')]
-    try {
-      for (const v of listDirSafe('/Volumes')) homes.push(path.join('/Volumes', v, 'Applications'))
-    } catch (e) {
-      /* /Volumes 不可读就算了 */
-    }
-    for (const base of homes) {
-      for (const d of listDirSafe(base)) {
-        if (/^Blender.*\.app$/i.test(d)) {
-          cands.push(path.join(base, d, 'Contents', 'MacOS', 'Blender'))
-        }
-      }
-      // 兜底：未版本化的固定名
-      cands.push(path.join(base, 'Blender.app', 'Contents', 'MacOS', 'Blender'))
-    }
-  } else {
-    // Linux/WSL：扫 /mnt/<盘>/Program Files/Blender Foundation/Blender*/blender.exe（含 Steam 版常见位置）
-    // WSL：扫 /mnt/<盘>/Program Files/Blender Foundation/Blender*/blender.exe（含 Steam 版常见位置）
-    for (const drive of ['c', 'd', 'e', 'f']) {
-      const base = '/mnt/' + drive
-      if (!fs.existsSync(base)) continue
-      for (const d of listDirSafe(path.join(base, 'Program Files', 'Blender Foundation'))) {
-        if (/^Blender/i.test(d))
-          cands.push(path.join(base, 'Program Files', 'Blender Foundation', d, 'blender.exe'))
-      }
-      for (const rel of [
-        'SteamLibrary/steamapps/common/Blender/blender.exe',
-        'Steam/steamapps/common/Blender/blender.exe',
-        'Program Files/Blender Foundation/Blender/blender.exe',
-      ]) {
-        cands.push(path.join(base, rel))
-      }
-    }
-  }
-  for (const c of cands) {
-    try {
-      if (fs.existsSync(c)) return { exe: c, from: 'auto:install' }
-    } catch (e) {}
-  }
-  // PATH 兜底（Linux 用 which，Windows 用 where）
-  try {
-    const cmd = IS_WIN ? 'where.exe' : 'which'
-    // windowsHide: where.exe 是 console-subsystem，宿主无控制台时会被新配控制台（issue #43；非 Windows no-op）
-    const out = execFileSync(cmd, ['blender'], {
-      encoding: 'utf8',
-      timeout: 5000,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .split(/\r?\n/)
-      .filter(Boolean)[0]
-    if (out) return { exe: IS_WIN ? out.trim() : out.trim(), from: 'auto:path' }
-  } catch (e) {
-    /* 没装到 PATH */
-  }
-  return { exe: null, from: 'not-found' }
-}
-
 const WORK = resolveWorkDir()
-const BLENDER = detectBlenderExe()
+/** blender.exe 探测在 runtime/blender-detect.ts（可注入依赖；Windows 含 Steam 库）。
+ *  config.ts 不再转出 detectBlenderExe：需要探测结果的调用方直接 import blender-detect.js；
+ *  这里只用一次（模块级 CFG），探测来源见 CFG.source.blenderExe。 */
+const BLENDER = detectBlenderExe({ fileCfg: FILE.cfg })
 
 function num(v: unknown, d: number): number {
   const n = Number(v)
@@ -476,7 +400,7 @@ export const CFG = {
   // 目录（成对：Windows 侧给 Blender 写，宿主侧给 Node 读）
   workDirWin: WORK.win,
   workDirWsl: WORK.wsl,
-  /** S9：workDir 探写结果与回退留痕（null=原候选可写；非 null=已回退，见 errs） */
+  /** workDir 探写结果与回退留痕（null=原候选可写；非 null=已回退，见 errs） */
   workDirFallback: WORK.fallback || null,
   workDirWritable: WORK.writable !== false,
   // 无头进程
@@ -531,7 +455,7 @@ export function describeConfig(over: { httpPort?: number | string } = {}) {
       wsl: CFG.workDirWsl,
       from: CFG.source.workDir,
       fallback: CFG.workDirFallback,
-      // v0.9.6（D3）：这个工作目录 Windows 侧看不看得见（false = 无头脚本会打不开，必须换目录）
+      // v0.9.6：这个工作目录 Windows 侧看不看得见（false = 无头脚本会打不开，必须换目录）
       shared: wslPathShared(CFG.workDirWsl),
     },
     blenderExe: CFG.blenderExe,

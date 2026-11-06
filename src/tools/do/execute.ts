@@ -2,20 +2,15 @@
 import type { HostContext } from '../../host/context.js'
 import { BACKEND_HINT } from '../../constants.js'
 import { ensureBackend } from '../../host/backend/index.js'
-import {
-  actErrorText,
-  backendErrorText,
-  backendPost,
-  fetchFrame,
-  leasedText,
-  numTriple,
-} from '../../host/http.js'
+import { backendPost, fetchFrame, leasedText, numTriple } from '../../host/http.js'
 import { frameDedupe, dedupeNote } from '../../utils/frame-cache.js'
 import { toAttachment, readLocalPng } from '../../utils/image.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { isHostAbort, toolError } from '../errors.js'
 import { formatActText, formatSessionExec, formatSessionSee } from './envelope.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
+import { backendErrorText } from './../../host/error-text.js'
+import { actErrorText } from './../../host/error-text.js'
 
 const LF = String.fromCharCode(10)
 
@@ -48,7 +43,7 @@ export async function executeDo(
     ortho_scale: args.ortho_scale,
     view_size: args.view_size,
   }
-  // P0：显式 session → 不探 GUI，直接持久无头会话（exec + see，同一 turn 内可连续调用）
+  // 显式 session → 不探 GUI，直接持久无头会话（exec + see，同一 turn 内可连续调用）
   if (args.session) {
     const s = await doViaSession(ctx, port, sessOpts)
     return (
@@ -118,7 +113,7 @@ async function maybeActSee(
   try {
     const size = Math.max(120, Math.min(1600, Number(args.max_size || 560)))
     const f = await fetchFrame(port, size)
-    // v0.9.4（P0-2）：连续 rt_do 里画面没变就不重复附图（迭代回路最常见的浪费）
+    // v0.9.4：连续 rt_do 里画面没变就不重复附图（迭代回路最常见的浪费）
     const dd = frameDedupe('do-see:' + String(size), f.hash, !!args.force)
     if (dd.dup) {
       parts.push(

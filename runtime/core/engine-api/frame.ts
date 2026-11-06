@@ -1,7 +1,7 @@
-// engine API：截图/渲染性能/对象精简（F1.1 从 server-compat.ts 拆出）
+// engine API：截图/渲染性能/对象精简
 import { LIVE_PNG_WIN } from '../../paths.js'
-import { KERNEL_BOOTSTRAP } from '../kernel/index.js'
 import { createAddonFileReader } from './addon-file.js'
+import { KERNEL_BOOTSTRAP } from '../kernel/index.js'
 import type { EngineApiDeps } from './index.js'
 
 export function createFrameApi(E: EngineApiDeps) {
@@ -29,14 +29,8 @@ export function createFrameApi(E: EngineApiDeps) {
       const png = await readAddonFile(LIVE_PNG_WIN)
       return { png: png, meta: { method: 'screenshot_area', info: txt.trim() } }
     },
-    /** 渲染性能：status / apply / revert / analyze / help */
-    async perf(op: string, payload?: unknown) {
-      return E.perfCall(op, payload)
-    },
-    /** 对象精简：opt_analyze / opt_join */
-    async opt(op: string, payload?: unknown) {
-      return E.perfCall(op, payload)
-    },
+    // 渲染性能 perf / 对象精简 opt 是 perfCall 的 HTTP/脚本别名；原先这里只有一层纯转发，
+    // 4.4 收口到 core/engine/assemble.ts 的 surface 装配处（本文件只保留 frame/frameArea）。
     /** 取一帧视口 PNG（覆盖写固定文件） */
     async frame(maxSize = 560) {
       const res = await addon.send('get_viewport_screenshot', {

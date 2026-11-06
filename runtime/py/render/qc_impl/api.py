@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Split from qc.py; behavior preserved by the facade."""
+"""QC API entry: qc_dispatch, qc_render bridges, and the path-level align_iou wrapper."""
 from .common import *  # noqa: F401,F403
 from .pnggif import _gif_first_frame, gif_to_png
 from .load import qc_compare, qc_crop, qc_iou, qc_load, qc_mask, qc_profile, qc_profile_diff, qc_resize_mask
-from .align import _align_search, _iou_pair, _rotate_mask, qc_align_rotate, qc_mask_auto, qc_metrics
+from .align import _align_search, _bbox, _iou_pair, _rotate_mask, qc_align_iou, qc_align_rotate, qc_mask_auto, qc_metrics
 from .metrics import qc_compare_auto, qc_help, qc_mask_sweep, qc_robustness_check, qc_self_check
 
 def m_aabb_err(obj_name, target_size):
@@ -48,34 +48,20 @@ def m_profile_err(view_spec, ref_path, ref_box, bins=24, sat=0.13, v=0.74):
     return float(res["profile"]["diff"]["mean_diff_px"])
 
 
-# ---------------------------------------------------------------- 渲染 harness 转接（v0.8.8 / P2-1）
+# ---------------------------------------------------------------- 渲染 harness 转接（v0.8.8）
 
 def _load_qc_render():
-    """拿 qc_render 模块的 API：优先 K.dsh_qc_render_api，其次现场加载 qc_render.py。
+    """拿 qc_render 模块注册到内核的 API —— 只认 K.dsh_qc_render_api。
 
-    T8 起 qc_render.py 在 runtime/py/render/；K.runtime_dir 是 runtime 根，
-    用共享内核 find_runtime_file 同时兼容领域包与旧扁平布局。
-    这样即使进程里只注入了 qc.py（例如 headless 只 preload 了 qc），也能用渲染 harness。
+    qc_render 模块由 preload 注入（config/routing.json 的 qc_render 路由固定
+    preload="qc,qc_render"；手写 headless 脚本也要把它带上），注册时把 API
+    挂到内核上。旧的"现场找 qc_render.py 再 exec(compile(...))"已删除
+    二次加载兜底：领域包布局下那条路径只会加载到 facade 的副本，绕过内核注入，
+    可能给出与 preload 版本不一致的结果（静默的错值比明确失败更糟）。缺失时
+    由 qc_render_views / qc_render_help 返回带 hint 的明确错误。
     """
     K = _kernel()
-    api = getattr(K, "dsh_qc_render_api", None) if K is not None else None
-    if api:
-        return api
-    p = None
-    try:
-        p = _KIT.find_runtime_file("qc_render.py")
-    except Exception:
-        p = None
-    if not p:
-        d = getattr(K, "runtime_dir", None) if K is not None else None
-        if d:
-            p = os.path.join(str(d), "qc_render.py")
-    if p and os.path.isfile(p):
-        with open(p, encoding="utf-8") as fh:
-            src = fh.read()
-        exec(compile(src, p, "exec"), {"__name__": "dsh_qc_render", "__file__": p})
-        api = getattr(K, "dsh_qc_render_api", None)
-    return api
+    return getattr(K, "dsh_qc_render_api", None) if K is not None else None
 
 
 def qc_render_views(**kw):
@@ -85,7 +71,7 @@ def qc_render_views(**kw):
     """
     api = _load_qc_render()
     if api is None:
-        return _j({"ok": False, "error": "qc_render 模块不可用：K.dsh_qc_render_api 缺失且 runtime 下没有 qc_render.py（含 py/render 领域包）",
+        return _j({"ok": False, "error": "qc_render 模块不可用：K.dsh_qc_render_api 缺失（qc_render 未注入内核）",
                    "hint": "headless 用 preload='qc,qc_render'；GUI 走 blender_rt_plan(op='qc_render_views')"})
     return api["render_views"](kw)
 
@@ -93,7 +79,8 @@ def qc_render_views(**kw):
 def qc_render_help():
     api = _load_qc_render()
     if api is None:
-        return _j({"ok": False, "error": "qc_render 模块不可用"})
+        return _j({"ok": False, "error": "qc_render 模块不可用：K.dsh_qc_render_api 缺失（qc_render 未注入内核）",
+                   "hint": "headless 用 preload='qc,qc_render'；GUI 走 blender_rt_plan(op='qc_render_views')"})
     return api["help"]()
 
 
@@ -120,11 +107,56 @@ def qc_dispatch(op, args=None):
         return _j({"ok": False, "error": "参数不匹配: %s" % e, "op": op, "given": sorted(kw), "sig_hint": qc_help()})
 
 
+def qc_align_iou_op(ref_path, ref_box=None, render_path=None, render_box=None, pad_frac=0.05):
+    """路径级 align_iou：读两张图 → 自适应掩膜 → 对齐后算 IoU。
+
+    catalog 的 qc_align_iou 只声明名字；这里补上路径级入口（qc_align_iou 本身吃
+    numpy 数组，工具侧无法直接传）。返回 JSON 安全的标量，mask/canvas 数组不进入回执。
+    """
+    if not ref_path:
+        return _j({"ok": False, "error": "align_iou：缺少 ref_path", "op": "align_iou"})
+    if not render_path:
+        return _j({"ok": False, "error": "align_iou：缺少 render_path", "op": "align_iou"})
+    ref_srgb, ref_alpha = qc_load(ref_path)
+    if ref_box:
+        ref_srgb = qc_crop(ref_srgb, ref_box)
+        ref_alpha = qc_crop(ref_alpha, ref_box)
+    ref_mask, ref_info = qc_mask_auto(ref_srgb, ref_alpha)
+    ren_srgb, ren_alpha = qc_load(render_path)
+    if render_box:
+        ren_srgb = qc_crop(ren_srgb, render_box)
+        ren_alpha = qc_crop(ren_alpha, render_box)
+    ren_mask, ren_info = qc_mask_auto(ren_srgb, ren_alpha)
+    # qc_align_iou 的坐标约定要求渲染 alpha 的 bbox 从 (0,0) 开始；先把两边裁到
+    # 各自掩膜 bbox（纯平移因此被对齐吃掉，留下的是形状相似度），避免远离原点时
+    # 画布越界或系统性低分。
+    ref_bb = _bbox(ref_mask)
+    ren_bb = _bbox(ren_mask)
+    if ref_bb is None or ren_bb is None:
+        return _j({"ok": False, "error": "align_iou：参考或渲染前景掩膜为空", "op": "align_iou",
+                   "masks": {"ref": ref_info, "render": ren_info}})
+    rx0, ry0, rx1, ry1 = ref_bb
+    nx0, ny0, nx1, ny1 = ren_bb
+    ref_crop = ref_srgb[ry0:ry1 + 1, rx0:rx1 + 1]
+    ref_mask_crop = ref_mask[ry0:ry1 + 1, rx0:rx1 + 1]
+    ren_crop = ren_srgb[ny0:ny1 + 1, nx0:nx1 + 1]
+    ren_mask_crop = ren_mask[ny0:ny1 + 1, nx0:nx1 + 1]
+    rgba = np.dstack([ren_crop, np.asarray(ren_mask_crop, dtype=np.float32)])
+    aligned = qc_align_iou(ref_crop, ref_mask_crop, rgba, pad_frac=pad_frac)
+    if aligned is None:
+        return _j({"ok": False, "error": "align_iou：参考或渲染前景掩膜为空", "op": "align_iou",
+                   "masks": {"ref": ref_info, "render": ren_info}})
+    return _j({"ok": True, "op": "align_iou", "iou": round(float(aligned["iou"]), 4),
+               "inter": int(aligned["inter"]), "union": int(aligned["union"]),
+               "ref_px": int(aligned["ref_px"]), "render_px": int(aligned["render_px"]),
+               "scale": aligned["scale"], "masks": {"ref": ref_info, "render": ren_info}})
+
+
 def qc_ops():
     return {"load": qc_load, "crop": qc_crop, "mask": qc_mask, "mask_auto": qc_mask_auto, "iou": qc_iou,
             "profile": qc_profile, "profile_diff": qc_profile_diff,
-            "compare": qc_compare_auto, "compare_basic": qc_compare,
-            "align_search": _align_search, "align_rotate": qc_align_rotate, "rotate_mask": _rotate_mask,
+            "compare": qc_compare_auto, "compare_auto": qc_compare_auto, "compare_basic": qc_compare,
+            "align_search": _align_search, "align_iou": qc_align_iou_op, "align_rotate": qc_align_rotate, "rotate_mask": _rotate_mask,
             "gif_to_png": gif_to_png, "metrics": qc_metrics, "self_check": qc_self_check,
             "robustness_check": qc_robustness_check, "mask_sweep": qc_mask_sweep,
             "resize_mask": qc_resize_mask, "write_png": write_png, "help": qc_help,

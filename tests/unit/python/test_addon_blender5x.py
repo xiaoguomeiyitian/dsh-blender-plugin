@@ -43,12 +43,14 @@ def test_stub_reports_the_requested_blender_version(blender_5x):
     assert blender_5x.app.version_string == "5.2.2"
 
 
-def test_compat_helpers_understand_5x(blender_5x):
-    assert compat.bpy_version() == BLENDER_5X
-    assert compat.is_bpy_at_least(5, 0, 0) is True
-    assert compat.is_bpy_at_least(5, 2, 0) is True
-    assert compat.is_bpy_at_least(5, 3, 0) is False
-    assert compat.is_bpy_at_least(4, 2, 0) is True   # the declared floor still holds
+def test_compat_module_still_exposes_the_addon_identity(blender_5x):
+    """compat 只剩「add-on 模块身份」这一件事。
+
+    ⚠️ 上游 v3.0.6 的死代码清理删掉了本 fork 曾加的 bpy_version /
+       is_bpy_at_least 辅助函数（**全仓无人调用**）⇒ 这里不复活死代码，
+       只守住仍被使用的 ADDON_MODULE。
+    """
+    assert compat.ADDON_MODULE == "addon.dsh_blender_bridge"
 
 
 def test_addon_info_reports_the_running_blender_version(blender_5x):

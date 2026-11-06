@@ -33,4 +33,11 @@ coverage/
 
 # Local-only working notes and evidence: never commit
 /docs/refactor/
+/.dsh/
+/.dsh-ops/
+# Local PR-review workspace (never committed or shipped)
+/.review-tmp/
 .vscode/
+
+# fork：parity 门 fixture 的共享临时目录（见 tests/unit/js/contract/catalog-dispatch-parity.test.ts）
+.tmp/

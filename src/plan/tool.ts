@@ -2,13 +2,14 @@ import { vTool } from '../contracts/tool.js'
 import { ANY_SCHEMA } from '../tools/schema-diagnostic.js'
 import { BACKEND_HINT, PLUGIN_VERSION, T } from '../constants.js'
 import { ensureBackend } from '../host/backend/index.js'
-import { backendErrorText, backendPost, jsonPayload, leasedText } from '../host/http.js'
+import { backendPost, jsonPayload, leasedText } from '../host/http.js'
 import { renderStructured } from '../ui/cards.js'
 import { finishPlanResponse, planViaWorker } from './headless-target.js'
 import { toolError } from '../tools/errors.js'
 import { asRecord, text } from '../contracts/dynamic.js'
 import type { HostContext } from '../host/context.js'
 import { backendUnavailableText, instanceTimeout } from '../host/instance-route.js'
+import { backendErrorText } from './../host/error-text.js'
 
 export function registerPlan(ctx: HostContext, port: number): void {
   ctx.effect(

@@ -1,10 +1,11 @@
 /** txn 执行层：参数收敛 → POST /txn → 文本渲染。 */
 import { ensureBackend } from '../../host/backend/index.js'
-import { backendErrorText, backendPost, leasedText } from '../../host/http.js'
+import { backendPost, leasedText } from '../../host/http.js'
 import { asRecord, text } from '../../contracts/dynamic.js'
 import { toolError } from '../errors.js'
 import { formatTxn } from './response.js'
 import { backendUnavailableText } from '../../host/instance-route.js'
+import { backendErrorText } from './../../host/error-text.js'
 
 export async function executeTxn(port: number, args: Record<string, unknown>): Promise<unknown> {
   if (!(await ensureBackend(port)))

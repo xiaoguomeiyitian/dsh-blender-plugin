@@ -3,7 +3,7 @@ import { objArg } from './deps.js'
 import type { HttpRouteDeps } from './deps.js'
 import { errorMessage, errorField } from '../../core/json.js'
 import { parseBodyPayload } from '../response.js'
-// HTTP 路由 /act：Python 执行（T7）
+// HTTP 路由 /act：Python 执行
 export function createActRoutes(E: HttpRouteDeps) {
   const { engine, json, leaseGate, pushRtt, readBody, stats } = E
   return {

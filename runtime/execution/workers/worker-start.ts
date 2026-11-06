@@ -1,9 +1,10 @@
-// worker 启动与就绪（F1.1 从 workers.ts 拆出，行为冻结）
+// worker 启动与就绪
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { winToWsl, wslToWin } from '../../config.js'
+import { assertBlenderExe, blenderExeSource } from '../exe-guard.js'
 import {
   BLENDER_EXE,
   USER_CONFIG_WIN,
@@ -15,6 +16,9 @@ import { KERNEL_BOOTSTRAP } from '../../core/kernel/index.js'
 import { errorMessage } from '../../core/json.js'
 import type { WorkerRecord, WorkersCtx } from './api.js'
 import { workerAlive, workerCall, workerSnapshot, workerState, workerKey } from './api.js'
+
+// assertBlenderExe 提到 runtime/execution/exe-guard.ts（job 通道共用），这里保持旧导出名兼容。
+export { assertBlenderExe } from '../exe-guard.js'
 
 export interface WorkerInfo {
   timedOut?: boolean
@@ -30,7 +34,7 @@ function prepareBootFile(
   w: WorkerRecord,
   opts: Record<string, unknown>,
 ): string | null {
-  // P0：preload —— 把 KERNEL_BOOTSTRAP + 模块源码写成 boot 文件，worker 在 ready 前 exec。
+  // preload —— 把 KERNEL_BOOTSTRAP + 模块源码写成 boot 文件，worker 在 ready 前 exec。
   const preloadRaw = opts.preload === undefined || opts.preload === null ? [] : opts.preload
   const preloadList = (Array.isArray(preloadRaw) ? preloadRaw : String(preloadRaw).split(','))
     .map((x) => String(x).trim().replace(/\.py$/, ''))
@@ -190,6 +194,8 @@ async function warmupWorker(w: WorkerRecord): Promise<Record<string, unknown>> {
   }
 }
 
+// BLENDER_EXE 为空时 spawn() 会同步抛 Node 的 TypeError，child.on('error')
+// 与 assertWorkerReady 的 hint 都走不到。启动前预检（实现在 exe-guard.ts），给出可执行的配置指引。
 export async function workerStart(
   ctx: WorkersCtx,
   opts: Record<string, unknown> = {},
@@ -197,6 +203,8 @@ export async function workerStart(
 ): Promise<Record<string, unknown>> {
   const w = workerState(ctx, nameArg !== undefined ? nameArg : opts.name)
   if (workerAlive(w) && w.ready) return workerSnapshot(w)
+  // 预检必须在 prepareBootFile 写盘与 spawn 之前：exe 为空时不再触发 Node 原始 TypeError。
+  assertBlenderExe(BLENDER_EXE, blenderExeSource())
   if (w.child) {
     try {
       w.child.kill('SIGKILL')
@@ -234,7 +242,7 @@ export async function workerStart(
   w.boot = (info.ok && info.ok.boot) || null
   w.lastUsed = Date.now()
   ctx.metrics.workerStarts++
-  // P0 交互式 headless：首帧 Workbench 渲染有 ~1 s 的渲染器初始化（本机实测 first 1003ms / second 13ms）。
+  // 交互式 headless：首帧 Workbench 渲染有 ~1 s 的渲染器初始化（本机实测 first 1003ms / second 13ms）。
   // 在 start 时做一次极小 warmup（64×36），把这一秒付掉；之后每次 see 才是 10–40ms。
   let warm: Record<string, unknown> | null = null
   if (opts.warmup !== false) warm = await warmupWorker(w)
