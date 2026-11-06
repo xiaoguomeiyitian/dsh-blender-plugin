@@ -65,6 +65,22 @@ def test_connect_starts_the_real_socket_server(gui_run):
     assert detail["port"] > 0
 
 
+def test_gui_warmup_finishes_before_the_client_starts(gui_run):
+    """探针必须**先让窗口画完第一帧**再让客户端连。
+
+    ⚠️ 为什么要这道门：软件渲染（llvmpipe）+ 内存紧张时，Blender 的首帧可能
+    十几秒；主线程被占住 ⇒ addon 的 socket 定时器排队 ⇒ 客户端 10s 超时 ⇒
+    **假红**（功能其实是好的）。⇒ 探针先做一次重绘预热，把首帧成本付在
+    客户端计时之外；roundtrip 这时才真正测的是「主线程在服务 socket」。
+
+    ⇒ 这里断言：预热这一步**确实发生了**，且**早于**客户端启动。
+    """
+    detail = harness.check(gui_run, "gui_warmup")["detail"]
+    assert detail["performed"] is True
+    assert detail["before_client"] is True
+    assert detail["elapsed_s"] >= 0
+
+
 def test_socket_roundtrip_served_by_the_blender_main_thread(gui_run):
     detail = harness.check(gui_run, "socket_roundtrip")["detail"]
     assert detail["responses"] is not None

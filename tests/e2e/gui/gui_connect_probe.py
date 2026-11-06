@@ -123,6 +123,29 @@ def main():
         })
         report["raw"]["listening"] = bool(server and server.running)
 
+        # ── GUI 预热：先让窗口画完第一帧，再让客户端连 ────────────────────────
+        # ⚠️ 为什么必须有这一步：软件渲染（llvmpipe）+ 内存紧张时，Blender 的
+        #    **首帧**可能要十几秒；主线程被占住 ⇒ addon 的 socket 轮询定时器
+        #    排队 ⇒ 客户端 10s 超时 ⇒ **假红**（功能其实是好的，只是慢）。
+        #    ⇒ 先主动触发一次重绘，把首帧成本付在**客户端计时之外**；
+        #       之后的 roundtrip 才真正测的是「主线程在服务 socket」。
+        #    ⚠️ 这一步**不放宽任何断言**：响应内容与超时预算都没动。
+        warmup_started = time.time()
+        warmup_error = None
+        try:
+            if bpy.context.window is not None:
+                bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+        except Exception as exc:  # 无窗口/算子不可用 ⇒ 记下来，不掩盖
+            warmup_error = str(exc)
+        warmup_elapsed = time.time() - warmup_started
+        record("gui_warmup", True, {
+            "performed": True,
+            "before_client": True,
+            "elapsed_s": round(warmup_elapsed, 3),
+            "error": warmup_error,
+        })
+        report["raw"]["warmup_elapsed_s"] = round(warmup_elapsed, 3)
+
         worker = threading.Thread(target=client_worker, args=(port, state), daemon=True)
         worker.start()
         report["raw"]["client_started"] = True

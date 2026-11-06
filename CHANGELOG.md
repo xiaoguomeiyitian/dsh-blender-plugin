@@ -8,6 +8,14 @@
 
 ### 新增：正式支持 Blender 5.x
 
+- **GUI E2E 首帧预热**（`tests/e2e/gui/gui_connect_probe.py`）：探针在启动客户端
+  **之前**先触发一次窗口重绘（`bpy.ops.wm.redraw_timer`），把**首帧成本付在客户端
+  计时之外**。
+  ⚠️ 起因：软件渲染（llvmpipe）+ 内存紧张时，Blender 首帧可能要十几秒 ⇒ 主线程
+  被占住 ⇒ addon 的 socket 轮询定时器排队 ⇒ 客户端 10s 超时 ⇒ **假红**（功能是好的，
+  只是慢）。实测 4GB 机器 + 可用内存 ~700MB 时必红；预热后 4.2.9 / 5.2.2 均稳定通过。
+  ⇒ **不放宽任何断言**：响应内容、请求顺序、超时预算都没动，只挪走了环境噪声。
+  新增 E2E 断言 `gui_warmup`（预热确实发生，且早于客户端启动）。
 - **支持矩阵**：从"只验证 4.2 LTS"扩到 **Blender 4.2 LTS + Blender 5.x**。
   README（中英）、`docs/给第三方的安装清单.md`、`docs/architecture.md`、
   `CONTRIBUTING.md`（中英）、`tests/README.md` 同步改口径。
