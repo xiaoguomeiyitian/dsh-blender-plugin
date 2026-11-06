@@ -18,10 +18,14 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
+E2E_ROOT = HERE.parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if str(E2E_ROOT) not in sys.path:
+    sys.path.insert(0, str(E2E_ROOT))
 
 import harness  # noqa: E402
+import blender_version  # noqa: E402
 
 pytestmark = pytest.mark.blender
 
@@ -48,7 +52,9 @@ def test_blender_process_exits_zero_and_reports_env(blender_run):
     assert blender_run["returncode"] == 0, _dump(blender_run)
     assert "T10_E2E_RESULT " in (blender_run["stdout"] or ""), _dump(blender_run)
     report = blender_run["report"]
-    assert report is not None and report["blender"].startswith("4.2."), _dump(blender_run)
+    assert report is not None, _dump(blender_run)
+    blender_version.assert_blender_version(
+        report["blender"], blender_run["command"][0], where="addon e2e report")
     failed = sorted(name for name, value in report["checks"].items() if not value["ok"])
     assert failed == [], _dump(blender_run)
     assert set(report["checks"]) == {
@@ -81,7 +87,8 @@ def test_get_addon_info_contract(blender_run):
     assert info["addon_version"] == [1, 11]
     assert info["protocol_version"] == 11
     assert len(info["capabilities"]) == 16
-    assert info["blender_version"].startswith("4.2.")
+    blender_version.assert_blender_version(
+        info["blender_version"], blender_run["command"][0], where="get_addon_info")
 
 
 def test_execute_code_runs_a_real_bpy_command(blender_run):

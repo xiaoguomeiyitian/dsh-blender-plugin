@@ -103,6 +103,76 @@ jobs:
           PYTHON: .venv/bin/python
         run: npm run check:python-static
 
+  e2e:
+    name: Blender E2E (${{ matrix.blender }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # The officially supported Blender versions (README: 4.2 LTS + 5.x).
+        # Exact patch versions are pinned on purpose: bumping one is a
+        # deliberate act (download it, run the E2E locally, then edit here).
+        blender: ['4.2.9', '5.2.2']
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Xvfb (GUI E2E needs a display server)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xauth
+      - name: Download Blender ${{ matrix.blender }}
+        env:
+          BLENDER_VERSION: ${{ matrix.blender }}
+        run: |
+          set -euo pipefail
+          series="Blender${BLENDER_VERSION%.*}"
+          mkdir -p "$RUNNER_TEMP/blender"
+          curl -fsSL --retry 3 --retry-delay 5 \
+            -o "$RUNNER_TEMP/blender.tar.xz" \
+            "https://download.blender.org/release/${series}/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-components=1
+          "$RUNNER_TEMP/blender/blender" --version
+          echo "DSH_BLENDER_EXE=$RUNNER_TEMP/blender/blender" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: |
+          npm ci --legacy-peer-deps
+          python -m pip install -r requirements-dev.txt
+      - name: Build the add-on zip
+        run: npm run build:addon
+      - name: Blender E2E (headless)
+        env:
+          PYTHON: python
+          TMPDIR: ${{ runner.temp }}
+          DSH_T10_E2E_LOG_DIR: ${{ runner.temp }}/e2e-headless
+          DSH_T11B_E2E_LOG_DIR: ${{ runner.temp }}/e2e-native
+        run: npm run test:e2e
+      - name: Blender E2E (GUI)
+        env:
+          PYTHON: python
+          TMPDIR: ${{ runner.temp }}
+          DSH_T10_E2E_LOG_DIR: ${{ runner.temp }}/e2e-gui
+        run: xvfb-run -a npm run test:e2e:gui
+      - name: Upload E2E evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs-${{ matrix.blender }}
+          path: ${{ runner.temp }}/e2e-*
+          if-no-files-found: ignore
+
   coverage:
     name: Coverage ratchet
     runs-on: ubuntu-latest

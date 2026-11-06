@@ -13,10 +13,14 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
+E2E_ROOT = HERE.parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if str(E2E_ROOT) not in sys.path:
+    sys.path.insert(0, str(E2E_ROOT))
 
 import gui_harness as harness  # noqa: E402
+import blender_version  # noqa: E402
 
 pytestmark = pytest.mark.gui
 
@@ -46,7 +50,8 @@ def test_gui_probe_exits_zero_and_opened_a_window(gui_run):
     report = gui_run["report"]
     assert report is not None
     assert report["background"] is False
-    assert report["blender"].startswith("4.2.")
+    blender_version.assert_blender_version(
+        report["blender"], gui_run["command"][0], where="gui e2e report")
     assert report["raw"]["has_window"] is True
     failed = sorted(name for name, value in report["checks"].items() if not value["ok"])
     assert failed == [], _dump(gui_run)

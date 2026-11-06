@@ -116,9 +116,12 @@ class _Handlers:
 
 
 class _App:
-    def __init__(self):
-        self.version = (4, 2, 10)
-        self.version_string = "4.2.10"
+    def __init__(self, version=None):
+        # The stub can impersonate any Blender version: the repo supports
+        # 4.2 LTS **and** 5.x, so the add-on's version-dependent behaviour
+        # has to be checkable on both (see tests/unit/python/test_addon_blender5x.py).
+        self.version = tuple(version) if version else (4, 2, 10)
+        self.version_string = ".".join(str(part) for part in self.version)
         self.background = True
         self.tempdir = None
         self.binary_path = ""
@@ -150,9 +153,36 @@ def _make_prop(kind):
     return factory
 
 
-def install():
-    """Install fake bpy/mathutils modules into sys.modules and return bpy."""
+def set_version(version):
+    """Change the Blender version the installed stub impersonates.
+
+    The stub is a process-wide singleton (one ``bpy`` in ``sys.modules``), so a
+    test that needs a different Blender version has to *switch* it — and
+    switch it back afterwards.  ``install(version=...)`` does both.
+    """
+    version = tuple(version)
+    bpy = sys.modules.get("bpy")
+    if bpy is None or not getattr(bpy, "_dshbb_stub", False):
+        raise RuntimeError("bpy stub is not installed")
+    app = getattr(bpy, "app", None)
+    if app is None:
+        raise RuntimeError("bpy stub has no bpy.app")
+    app.version = version
+    app.version_string = ".".join(str(part) for part in version)
+    return version
+
+
+def install(version=None):
+    """Install fake bpy/mathutils modules into sys.modules and return bpy.
+
+    ``version`` impersonates a specific Blender version (e.g. ``(5, 2, 2)``);
+    the default stays at 4.2.10 so existing tests keep their expectations.
+    When the stub is already installed, ``version`` switches its reported
+    version (the stub is a singleton — see :func:`set_version`).
+    """
     if "bpy" in sys.modules and getattr(sys.modules["bpy"], "_dshbb_stub", False):
+        if version is not None:
+            set_version(version)
         return sys.modules["bpy"]
 
     bpy = types.ModuleType("bpy")
@@ -198,7 +228,7 @@ def install():
     utils_mod.registered = utils.registered
 
     app_mod = types.ModuleType("bpy.app")
-    app = _App()
+    app = _App(version)
     app_mod.version = app.version
     app_mod.version_string = app.version_string
     app_mod.background = app.background
@@ -348,6 +378,9 @@ def install():
         mathutils.Matrix = type("Matrix", (), {})
         mathutils.Euler = type("Euler", (), {})
         sys.modules["mathutils"] = mathutils
+
+    if version is not None:
+        set_version(version)
 
     return bpy
 

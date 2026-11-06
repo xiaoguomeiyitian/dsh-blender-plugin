@@ -18,10 +18,14 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
+E2E_ROOT = HERE.parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if str(E2E_ROOT) not in sys.path:
+    sys.path.insert(0, str(E2E_ROOT))
 
 import harness  # noqa: E402
+import blender_version  # noqa: E402
 import native_manifest  # noqa: E402
 
 pytestmark = pytest.mark.blender
@@ -68,7 +72,8 @@ def test_native_report_is_explicit_and_repo_clean(native_run):
     assert report["module"] == module["id"], _dump(native_run)
     assert report["module_path"].replace("\\", "/").endswith(module["path"]), _dump(native_run)
     assert report["preloads"] == list(module.get("preloads") or ()), _dump(native_run)
-    assert report["blender_version"].startswith("4.2."), _dump(native_run)
+    blender_version.assert_blender_version(
+        report["blender_version"], native_run["command"][0], where="native e2e report")
     out_dir = Path(report["out_dir"]).resolve()
     assert out_dir.is_dir(), _dump(native_run)
     assert Path(native_run["out_dir"]).resolve() == out_dir, _dump(native_run)

@@ -6,6 +6,25 @@
 > **34 family / 228 op**，addon 仍是 **38 命令 / protocol 11**（addon 未改动）。
 > 下面每条都注明在 v3 的落点；"上游已吸收"= v3.0.5 已有等价实现，不再重复。
 
+### 新增：正式支持 Blender 5.x
+
+- **支持矩阵**：从"只验证 4.2 LTS"扩到 **Blender 4.2 LTS + Blender 5.x**。
+  README（中英）、`docs/给第三方的安装清单.md`、`docs/architecture.md`、
+  `CONTRIBUTING.md`（中英）、`tests/README.md` 同步改口径。
+- **E2E 版本契约**（`tests/e2e/blender_version.py`，新增）：E2E 不再硬编码
+  `startswith("4.2.")`，改为断言
+  ① 报告里的版本 **等于实际运行的那个二进制**（`<exe> --version` 为准）——
+  报告说谎（跑错了 Blender）就红；
+  ② 该版本落在支持范围内（下限取 addon 自己的 `bl_info["blender"]`，
+  支持主版本 {4, 5}）—— Blender 6 出现时门会红，直到正式支持它。
+  ⇒ 比原来的断言**更严**（原来只能证明"套件还能在 4.2 上跑"）。
+- **CI 双版本 E2E**（`.github/workflows/pr.yml` 新增 `e2e` job）：矩阵
+  `4.2.9` / `5.2.2`，无头 + GUI（Xvfb）都跑，失败时上传 E2E 日志。
+- **单元层 5.x 覆盖**：fake-bpy stub 支持注入版本
+  （`bpy_stub.install(version=...)`），新增 `tests/unit/python/test_addon_blender5x.py`
+  验证 addon 在 5.x 上报版本、握手、注册/反注册都正常。
+- **实测**：4.2.9 与 5.2.2 上无头 E2E 各 **80 passed**、GUI E2E 各 **8 passed**。
+
 ### 已移植
 
 - **① HOST 环境变量覆盖**（fork delta ①）：`runtime/http/config.ts` 的 `HOST` 改为

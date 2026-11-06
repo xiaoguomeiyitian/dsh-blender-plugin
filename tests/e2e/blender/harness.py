@@ -1,6 +1,7 @@
 """Real-Blender harness for the add-on E2E layer (T10).
 
-Spawns Blender 4.2 LTS with --background --factory-startup, points
+Spawns a real Blender (4.2 LTS or 5.x — see tests/e2e/blender_version.py) with
+--background --factory-startup, points
 BLENDER_USER_SCRIPTS at a throw-away directory, installs the committed add-on
 zip, calls the runner inside Blender, and returns the JSON check report plus the
 raw stdout/stderr so the evidence pack can keep the real log.
@@ -24,8 +25,13 @@ ZIP_PATH = REPO_ROOT / "addon" / "dsh_blender_bridge.zip"
 RUNNER = Path(__file__).resolve().parent / "runner.py"
 NATIVE_RUNNER = Path(__file__).resolve().parent / "native_runner.py"
 
+#: Discovery order: the configured executable wins; otherwise look for the
+#: officially supported Blender versions (newest first) before the generic
+#: locations.  A Blender outside the supported range is reported as such by
+#: the version contract instead of silently passing.
 DEFAULT_BLENDER_CANDIDATES = (
     os.environ.get("DSH_BLENDER_EXE", ""),
+    "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe",
     "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe",
     "/usr/bin/blender",
     "/Applications/Blender.app/Contents/MacOS/Blender",
@@ -39,7 +45,7 @@ def blender_executable():
         if candidate.is_file():
             return str(candidate)
         return shutil.which(configured)
-    for name in ("blender", "blender4.2"):
+    for name in ("blender", "blender5", "blender4.2"):
         found = shutil.which(name)
         if found:
             return found
