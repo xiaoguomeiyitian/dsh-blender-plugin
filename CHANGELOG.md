@@ -8,6 +8,20 @@
 > 能力面不变：模型工具仍 **15 个**，plan catalog 仍 **34 family / 228 op**，
 > addon 仍是 **38 命令 / protocol 11**。
 
+### 变更：测试目标收敛到 Blender 5.x（不再测 4.x）
+
+- **CI 矩阵只跑 5.2.2**（`.github/workflows/pr.yml`）：自 2026-11-07 起，4.2 LTS
+  不再进 E2E 矩阵与发布闸门 ⇒ 少跑一整套真 Blender 的无头 + GUI 往返。
+- **支持范围不变**：4.2 LTS 仍在支持范围内（addon 的 `bl_info["blender"]` 下限与
+  `tests/e2e/blender_version.py` 的范围校验都没动）⇒ 只是**没有自动化覆盖**了。
+  真要手动验 4.2，自备二进制并设 `DSH_BLENDER_EXE` 即可（脚本见
+  `tests/e2e/blender_42_headless.mjs`）。
+- **断言一处没放宽**：版本契约仍要求「报告里的版本 == 实际运行的那个二进制，且落在
+  支持范围内」⇒ 在 5.2.2 上跑的仍是**更严**的检查。
+- 文档口径同步（中英）：README / CONTRIBUTING / architecture / tests README /
+  第三方安装清单都改成「5.x 是测试目标，4.2 保留支持但不进测试矩阵」；
+  行为矩阵的 `ENV-BLENDER-42` 行加注说明它已不在 CI/闸门里。
+
 ### 新增：正式支持 Blender 5.x
 
 - **GUI E2E 首帧预热**（`tests/e2e/gui/gui_connect_probe.py`）：探针在启动客户端

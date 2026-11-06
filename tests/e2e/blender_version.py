@@ -1,6 +1,7 @@
 """Blender version contract for the E2E layer (shared by headless + GUI).
 
-The repo supports Blender **4.2 LTS** and **5.x** (see README).  The E2E
+The repo supports Blender **4.2 LTS** and **5.x** (see README), while CI
+tests **5.x only** (the 4.2 LTS leg was dropped on 2026-11-07).  The E2E
 layer therefore must not hard-code one version: it has to prove two things.
 
 1. **Honesty** — the report states *the very Blender that actually ran*.

@@ -2151,8 +2151,8 @@
   },
   "behaviorMatrix": {
     "total": 346,
-    "covered": 344,
+    "covered": 343,
     "planned": 0,
-    "exempt": 2
+    "exempt": 3
   }
 }

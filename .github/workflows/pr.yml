@@ -106,10 +106,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The officially supported Blender versions (README: 4.2 LTS + 5.x).
+        # The tested Blender target (README: 5.x).  The 4.2 LTS leg was
+        # dropped on 2026-11-07 ⇒ 4.2 LTS stays inside the supported range
+        # but has no automated coverage any more.
         # Exact patch versions are pinned on purpose: bumping one is a
         # deliberate act (download it, run the E2E locally, then edit here).
-        blender: ['4.2.9', '5.2.2']
+        blender: ['5.2.2']
     env:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: '1'

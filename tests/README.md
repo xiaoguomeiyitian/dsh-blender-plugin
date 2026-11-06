@@ -29,7 +29,7 @@ Run: `npm run test:integration`.
 
 `tests/e2e/blender` and `tests/e2e/gui`.
 
-Real Blender (every officially supported version: 4.2 LTS and 5.x — see tests/e2e/blender_version.py for the version contract) and the packaged add-on, plus a GUI/backend probe. These tests are gated with
+Real Blender (the tested target: 5.x — 5.2.2 in CI; see tests/e2e/blender_version.py for the version contract) and the packaged add-on, plus a GUI/backend probe. These tests are gated with
 `pytest.mark.blender` / `pytest.mark.gui` and are excluded from the default collection by
 `pyproject.toml`. They run on release machines, not in pull-request CI.
 

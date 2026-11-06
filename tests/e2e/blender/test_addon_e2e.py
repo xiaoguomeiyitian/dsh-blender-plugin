@@ -1,4 +1,4 @@
-"""Real-Blender 4.2 add-on E2E (T10, release machine only).
+"""Real-Blender add-on E2E (T10, release machine only).
 
 One Blender process installs the committed zip, enables the add-on, exercises
 get_addon_info / execute_code / selection POST / pause gate / unknown command,

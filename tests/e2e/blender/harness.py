@@ -1,6 +1,6 @@
 """Real-Blender harness for the add-on E2E layer (T10).
 
-Spawns a real Blender (4.2 LTS or 5.x — see tests/e2e/blender_version.py) with
+Spawns a real Blender (5.x in CI — see tests/e2e/blender_version.py) with
 --background --factory-startup, points
 BLENDER_USER_SCRIPTS at a throw-away directory, installs the committed add-on
 zip, calls the runner inside Blender, and returns the JSON check report plus the

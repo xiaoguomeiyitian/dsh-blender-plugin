@@ -1,4 +1,4 @@
-"""Executed INSIDE a real Blender 4.2 process by harness.py (background mode).
+"""Executed INSIDE a real Blender process by harness.py (background mode).
 
 Steps: install the committed zip -> enable -> get_addon_info -> bpy execute ->
 selection POST to an in-process fake DSH backend -> pause gate -> uninstall.

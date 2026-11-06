@@ -36,7 +36,7 @@ DSH × Blender connects DeepSeek Harness to Blender so an agent can build, inspe
 
 - DSH (DeepSeek Harness) installed and working.
 - Node.js 24.9 or newer is needed only for source builds; installing from npm uses the runtime bundled with DSH. Node.js 24.9 is the minimum supported version; CI runs on Node 24.
-- **Blender 4.2 LTS and Blender 5.x are both supported and tested** (CI runs the E2E layer on 4.2.9 and 5.2.2; the E2E asserts that the running Blender is the one the report describes and that it is inside the supported range). GUI mode requires the bundled addon (install it first); headless mode only needs the Blender executable.
+- **Blender 5.x is the tested target**: CI runs the E2E layer on **5.2.2 only** (the 4.2 LTS leg was dropped from CI and the release gates on 2026-11-07); Blender 4.2 LTS stays inside the supported range but has no automated coverage any more. The E2E asserts that the running Blender is the one the report describes and that it is inside the supported range. GUI mode requires the bundled addon (install it first); headless mode only needs the Blender executable.
 - Addon compatibility: the bundled addon is the only required addon and the only supported agent bridge. Other addons do not conflict; an old `MCP for Blender` / `blender_mcp` does (same 127.0.0.1:9876 port) — disable it, no need to uninstall.
 - Optional: a DSH source checkout when rebuilding the host side; otherwise the build links against this repository's installed dependencies.
 

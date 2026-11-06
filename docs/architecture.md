@@ -156,7 +156,7 @@ Three layers, with a different job each:
 - Unit: Vitest and pytest, no Blender, no network, no real display. Host uses fake DSH/addon; Python
   uses fake bpy stubs for type checking and pure logic only.
 - Integration: real backend HTTP and in-memory or fake addon; route, lease, job, and contract behavior.
-- End-to-end: real Blender headless and GUI, on every officially supported version (4.2 LTS **and** 5.x; CI matrix). The E2E pins the reported Blender version to the binary under test (tests/e2e/blender_version.py) so a wrong or unsupported Blender fails instead of silently passing. The native runner loads modules inside Blender,
+- End-to-end: real Blender headless and GUI, on the tested target (5.x; the CI matrix runs 5.2.2 only — the 4.2 LTS leg was dropped on 2026-11-07). The E2E pins the reported Blender version to the binary under test (tests/e2e/blender_version.py) so a wrong or unsupported Blender fails instead of silently passing. The native runner loads modules inside Blender,
   resets the scene per test, writes JSON, and the host pytest launcher asserts the report.
 
 Python static checks are part of the same quality surface: ruff over runtime/py, tests, and the addon,
