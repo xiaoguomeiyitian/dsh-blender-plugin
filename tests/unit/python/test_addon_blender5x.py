@@ -11,8 +11,6 @@ real-5.x proof is the E2E layer (tests/e2e), which runs a real Blender 5.x.
 from __future__ import annotations
 
 import importlib
-import sys
-from pathlib import Path
 
 import pytest
 
