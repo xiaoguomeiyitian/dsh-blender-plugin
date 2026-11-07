@@ -99,10 +99,6 @@ def _exc_body(e, tag=""):
             "traceback": traceback.format_exc()[-600:]}
 
 
-def _noop_cleanup():
-    return {"ok": True, "removed": {}, "failed": [], "note": "没有临时加载任何东西"}
-
-
 def __load_file_objects_p1(st):
     path = st["path"]
     try:

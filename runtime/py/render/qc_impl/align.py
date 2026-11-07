@@ -144,31 +144,6 @@ def _fill_rc(m):
     return m
 
 
-def _warp_ref_mask(ref_mask, s, tx, ty, H, W):
-    """把参考掩膜按 (缩放 s, 平移 tx/ty) 采样到 HxW 画布（最近邻）。"""
-    ys = (np.arange(H, dtype=np.float32) - float(ty)) / max(1e-6, float(s))
-    xs = (np.arange(W, dtype=np.float32) - float(tx)) / max(1e-6, float(s))
-    yi = np.round(ys).astype(np.int64)
-    xi = np.round(xs).astype(np.int64)
-    valid_y = (yi >= 0) & (yi < ref_mask.shape[0])
-    valid_x = (xi >= 0) & (xi < ref_mask.shape[1])
-    out = np.zeros((H, W), dtype=bool)
-    if valid_y.any() and valid_x.any():
-        out[np.ix_(valid_y, valid_x)] = ref_mask[np.ix_(yi[valid_y], xi[valid_x])]
-    return out
-
-
-def _down(mask, work):
-    h, w = mask.shape[:2]
-    mx = max(h, w)
-    if mx <= work:
-        return mask, 1.0
-    s = float(work) / float(mx)
-    th = max(8, int(h * s))
-    tw = max(8, int(w * s))
-    return _scale_bool(mask, tw, th), s
-
-
 def _iou_pair(a, b):
     # 度量收敛到共享内核（唯一实现）；空并集时 kit 给 None，这里按旧契约返回 0.0
     iou, inter, uni = _KIT.iou(a, b)

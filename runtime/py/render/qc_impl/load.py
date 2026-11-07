@@ -150,14 +150,6 @@ def _to_u8(rgb):
     return (np.clip(rgb, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
 
 
-def _mask_bytes(mask, fg=(235, 235, 235), bg=(25, 25, 25)):
-    h, w = mask.shape
-    img = np.zeros((h, w, 3), dtype=np.uint8)
-    img[:, :] = bg
-    img[mask] = fg
-    return img
-
-
 def _hstack(imgs, pad=8, bg=(15, 15, 15)):
     h = max(i.shape[0] for i in imgs)
     total_w = sum(i.shape[1] for i in imgs) + pad * (len(imgs) - 1)

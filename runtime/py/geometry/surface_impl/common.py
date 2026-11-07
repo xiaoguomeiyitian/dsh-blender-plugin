@@ -107,14 +107,6 @@ def _mmu():
     return float(_KIT.units())
 
 
-def _mm2u(v):
-    return float(v) / max(_mmu(), 1e-12)
-
-
-def _u2mm(v):
-    return float(v) * _mmu()
-
-
 def _vec3(v):
     if not isinstance(v, (list, tuple)) or len(v) != 3:
         return None

@@ -127,15 +127,6 @@ def _lookup(cur, part):
         return None
 
 
-def _get_path(root, path):
-    cur = root
-    for part in str(path).split("."):
-        if cur is None:
-            return None, None
-        cur = _lookup(cur, part)
-    return cur, None
-
-
 def _set_path(root, path, value):
     parts = str(path).split(".")
     cur = root

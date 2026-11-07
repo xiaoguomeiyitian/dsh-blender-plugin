@@ -104,60 +104,6 @@ def _mark_creases_idx(me, ring_co, lines, edge_of=None, attr_name="crease_edge",
     return out
 
 
-def _mark_creases(me, lines, zmin, zmax, xmin, xmax):
-    """特征线（折痕层）：给落在指定高度/位置上的环边打 SubD 折痕权重（面感的来源）。
-
-    规格：{"z_mm": 900, "tol_mm": 40, "x_mm": [400, 3900], "weight": 0.8}   ← 纵向腰线/门线
-          {"frac": 0.55, "tol_frac": 0.06, "weight": 0.7}                    ← 按高度比例（旧 crease_shoulder）
-          {"x_mm": 1500, "tol_mm": 60, "weight": 1.0}                        ← 横向（A 柱/分缝）
-    返回 [{spec 摘要, edges}]。Blender 4+ 折痕走 crease_edge attribute（e.crease_weight 已不存在）。
-    """
-    if not lines:
-        return []
-    attr = me.attributes.get("crease_edge")
-    if attr is None:
-        attr = me.attributes.new("crease_edge", "FLOAT", "EDGE")
-    zr = max(1e-6, zmax - zmin)
-    xr = max(1e-6, xmax - xmin)
-    res = []
-    for sp in lines:
-        w = float(sp.get("weight") or 0.7)
-        zt = sp.get("z_mm")
-        if zt is None and sp.get("frac") is not None:
-            zt = zmin + float(sp["frac"]) * zr
-        xt = sp.get("x_mm") if not isinstance(sp.get("x_mm"), (list, tuple)) else None
-        ztol = float(sp.get("tol_mm") or 40.0) / 1000.0 if sp.get("z_mm") is not None else zr * float(sp.get("tol_frac") or 0.06)
-        xtol = float(sp.get("tol_mm") or 60.0) / 1000.0
-        zrange = sp.get("z_range_mm") if isinstance(sp.get("z_range_mm"), (list, tuple)) else None
-        xrange = sp.get("x_mm") if isinstance(sp.get("x_mm"), (list, tuple)) else None
-        n = 0
-        for e in me.edges:
-            a = me.vertices[e.vertices[0]].co
-            b = me.vertices[e.vertices[1]].co
-            hit = True
-            if zt is not None:
-                zt_m = float(zt) / 1000.0
-                if not (abs(a.z - zt_m) <= ztol and abs(b.z - zt_m) <= ztol):
-                    hit = False
-            if hit and xt is not None:
-                xt_m = float(xt) / 1000.0
-                if not (abs(a.x - xt_m) <= xtol and abs(b.x - xt_m) <= xtol):
-                    hit = False
-            if hit and xrange and not (float(xrange[0]) / 1000.0 - 1e-6 <= a.x <= float(xrange[1]) / 1000.0 + 1e-6):
-                hit = False
-            if hit and zrange and not (float(zrange[0]) / 1000.0 - 1e-6 <= a.z <= float(zrange[1]) / 1000.0 + 1e-6):
-                hit = False
-            if hit:
-                attr.data[e.index].value = w
-                n += 1
-        row = {"spec": {k: sp[k] for k in sp if k in ("z_mm", "frac", "x_mm", "tol_mm", "tol_frac", "weight")}, "edges": n}
-        if n == 0:
-            row["hint"] = ("没命中任何环边：纵向线检查 z_mm/tol_mm 与 z_range；横向线要落在两个站位之间时，"
-                           "vehicle_loft 会自动插站（x_mm 给数值即可），或把 tol_mm 放大")
-        res.append(row)
-    return res
-
-
 def _ring_from_outline(st, outline, flare=0.0):
     """**自定义截面轮廓**（可非对称：翼型/带弯度/异形）：outline = [[y_mm, z_mm], …] 闭合轮廓。
 

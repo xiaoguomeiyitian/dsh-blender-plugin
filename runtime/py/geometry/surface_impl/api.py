@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Split from surface_orig.py; behavior preserved by the facade."""
 from .common import *  # noqa: F401,F403
-from .objects import _bbox_mm, surface_blend, surface_loft, surface_offset, surface_patch, surface_sweep, surface_tessellate
+from .objects import surface_blend, surface_loft, surface_offset, surface_patch, surface_sweep, surface_tessellate
 from .validate import _circle_pts, _cleanup_objects, _meshes_equal, surface_validate
 
 
@@ -211,17 +211,6 @@ def surface_selftest():
             _cleanup_objects(victims)
         except Exception:
             pass
-
-
-
-def _object_bbox_mm(ob):
-    try:
-        import numpy as _np
-        M = ob.matrix_world
-        pts = [_np.array([*(M @ v.co)]) * _KIT.units() for v in ob.data.vertices]
-        return _bbox_mm(pts)
-    except Exception:
-        return {"min_mm": None, "max_mm": None, "size_mm": None, "center_mm": None}
 
 
 def _safe_stem(text, fallback="surface"):
