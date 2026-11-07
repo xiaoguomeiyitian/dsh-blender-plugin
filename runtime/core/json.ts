@@ -16,34 +16,10 @@ export function isArray(v: unknown): v is unknown[] {
   return Array.isArray(v)
 }
 
-export function isString(v: unknown): v is string {
-  return typeof v === 'string'
-}
-
-export function isNumber(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v)
-}
-
-export function isBoolean(v: unknown): v is boolean {
-  return typeof v === 'boolean'
-}
-
 /** 任意值 → string；null/undefined 返回 undefined（不编造空串）。 */
 export function readString(v: unknown): string | undefined {
   if (v === undefined || v === null) return undefined
   return typeof v === 'string' ? v : String(v)
-}
-
-/** 任意值 → 有限数字；无法转换或非正数时返回 fallback（配置项语义）。 */
-export function readPositiveNumber(v: unknown, fallback: number): number {
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) && n > 0 ? n : fallback
-}
-
-/** 任意值 → 有限数字；无法转换返回 fallback。 */
-export function readNumber(v: unknown, fallback: number): number {
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : fallback
 }
 
 /** 错误对象/字符串 → 可读消息（等价于旧代码的 String((e && e.message) || e)）。 */
@@ -69,9 +45,4 @@ export function errorField(e: unknown, key: string): unknown {
 export function errorDetail(e: unknown): string {
   if (isRecord(e) && typeof e.stack === 'string' && e.stack) return e.stack
   return errorMessage(e)
-}
-
-/** 任意值 → 普通记录（非对象时给空对象，用于可选配置片段）。 */
-export function readRecord(v: unknown): JsonRecord {
-  return isRecord(v) ? v : {}
 }

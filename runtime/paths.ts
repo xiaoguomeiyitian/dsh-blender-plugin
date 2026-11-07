@@ -93,13 +93,6 @@ export function pyModuleFile(name: unknown): string {
 export function pyModuleNames(): string[] {
   return Object.keys(PY_MODULE_DOMAIN).sort()
 }
-export function pyModuleExists(name: unknown): boolean {
-  try {
-    return fs.existsSync(pyModuleFile(name))
-  } catch (e) {
-    return false
-  }
-}
 /** 共享内核（kit）：JSON/API 样板·单位·几何·度量·回执骨架的唯一实现 */
 export const KIT_PATH = pyModuleFile('kit')
 /** 几何底座（geo）：**机制层** —— 布尔/开孔/开槽/镜像/阵列/拉伸/放样/倒角/自动平滑。

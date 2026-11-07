@@ -104,11 +104,6 @@ export async function detectProtocol(
   })
 }
 
-/** 兼容旧调用点（已无缓存；保留导出避免破坏调用方）。 */
-export function resetProtocolCache() {
-  /* no-op */
-}
-
 /**
  * 得到实际要用的协议描述符。只支持扁平协议 —— `prefer` 参数仅为兼容旧调用点，直接忽略。
  * @returns {Promise<{proto:object, from:'config'}>}
