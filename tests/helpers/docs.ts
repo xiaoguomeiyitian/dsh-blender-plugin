@@ -75,6 +75,9 @@ const SKIP_DIRS = new Set([
   '__pycache__',
   '.venv',
   'venv',
+  // 本 fork 的 parity 门 fixture 目录（**会随测试结束被删** ⇒ 扫描时可能撞上
+  // 「刚被删掉的文件」⇒ ENOENT 假红）。它不是仓库内容 ⇒ 一律跳过。
+  '.tmp',
 ])
 const SKIP_ANY = new Set([
   'node_modules',
@@ -84,6 +87,7 @@ const SKIP_ANY = new Set([
   '.vite',
   '.vite-temp',
   '.cache',
+  '.tmp',
 ])
 const TEXT_EXT = new Set([
   '.md',
