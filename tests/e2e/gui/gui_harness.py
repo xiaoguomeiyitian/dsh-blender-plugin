@@ -28,7 +28,7 @@ PROBE = Path(__file__).resolve().parent / "gui_connect_probe.py"
 #: versions first (newest first), generic locations last.
 DEFAULT_BLENDER_CANDIDATES = (
     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe",
-    "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe",
+    "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe",
     "/usr/bin/blender",
     "/Applications/Blender.app/Contents/MacOS/Blender",
 )
@@ -41,7 +41,7 @@ def blender_executable():
         if candidate.is_file():
             return str(candidate)
         return shutil.which(configured)
-    for name in ("blender", "blender5", "blender4.2"):
+    for name in ("blender", "blender5"):
         found = shutil.which(name)
         if found:
             return found

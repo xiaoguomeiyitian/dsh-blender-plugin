@@ -2,7 +2,7 @@
 
 The modules under tests/e2e/blender/native/ are plain Python files, not pytest
 tests: Blender's bundled Python has no pytest.  This launcher starts a real
-Blender 4.2 headless process per module and asserts the JSON report the runner
+Blender 5.x headless process per module and asserts the JSON report the runner
 writes.  It never imports bpy itself, so it is collectable on any machine (it
 skips when no Blender executable is configured).
 

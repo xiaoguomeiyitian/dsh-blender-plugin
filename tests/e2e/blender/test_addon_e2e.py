@@ -89,7 +89,7 @@ def test_get_addon_info_contract(blender_run):
     # 38 registered commands: the handshake capabilities derive from
     # command_registry.COMMAND_NAMES (D6) rather than a hardcoded 16-name list.
     assert len(info["capabilities"]) == 38
-    # 我们的版本契约：报告版本必须等于实际运行的二进制且在支持矩阵内（4.2 / 5.x）
+    # 我们的版本契约：报告版本必须等于实际运行的二进制且在支持矩阵内（5.x）
     blender_version.assert_blender_version(
         info["blender_version"], blender_run["command"][0], where="get_addon_info")
 

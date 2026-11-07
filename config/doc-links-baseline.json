@@ -1,12 +1,7 @@
 {
   "version": 1,
   "tool": "check-doc-paths",
-  "generatedAt": "2026-11-04T19:23:51.184Z",
-  "review": {
-    "owner": "docs-owner",
-    "reviewBy": "2027-06-30",
-    "reason": "The seven missing refs are frozen v2.3 host-contract and MIGRATIONS history targets; the docs keep their original text and no replacement files are planned."
-  },
+  "generatedAt": "2026-11-07T04:26:46.456Z",
   "docs": [
     "AGENTS.md",
     "CONTRIBUTING.md",
@@ -56,34 +51,10 @@
     "docs/配置参考.md": 5
   },
   "orphanDocs": [],
-  "missingRefs": [
-    {
-      "doc": "docs/宿主集成-接口契约-v2.3增补.md",
-      "target": "tests/selection_store_selftest.mjs"
-    },
-    {
-      "doc": "docs/宿主集成-接口契约-v2.3增补.md",
-      "target": "tests/host_routes_selftest.mjs"
-    },
-    {
-      "doc": "docs/宿主集成-接口契约-v2.3增补.md",
-      "target": "tests/client_bundle_selftest.mjs"
-    },
-    {
-      "doc": "docs/宿主集成-接口契约-v2.3增补.md",
-      "target": "tests/tui_host_selftest.mjs"
-    },
-    {
-      "doc": "docs/宿主集成-接口契约-v2.3增补.md",
-      "target": "runtime/selectionstore.mjs"
-    },
-    {
-      "doc": "MIGRATIONS.md",
-      "target": "docs/宿主集成-接口契约.md"
-    },
-    {
-      "doc": "MIGRATIONS.md",
-      "target": "scripts/addons/dsh_blender_bridge/"
-    }
-  ]
+  "missingRefs": [],
+  "review": {
+    "owner": "docs-owner",
+    "reviewBy": "2027-06-30",
+    "reason": "Baseline now lists 0 orphan docs and 0 missing path refs: the seven previously baselined refs were fixed on 2026-11-07 (v2.3 host-contract selftest refs -> current vitest contract tests, runtime/selectionstore.mjs -> .ts, MIGRATIONS history and Blender-user-dir paths reworded). Kept as a regression floor so new stale refs fail."
+  }
 }
