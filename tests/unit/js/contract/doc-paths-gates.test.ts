@@ -83,7 +83,9 @@ describe('check-doc-paths', () => {
     expect(report!.baseline.acceptedOrphans).toBe(0)
     expect(report!.baseline.acceptedMissingRefs).toBe(0)
     expect(report!.baseline.matches).toBe(true)
-    expect(report!.findings.missingRefs.map((entry) => entry.doc + ' -> ' + entry.target)).toEqual([])
+    expect(report!.findings.missingRefs.map((entry) => entry.doc + ' -> ' + entry.target)).toEqual(
+      [],
+    )
   })
 
   it('keeps the legacy hard checks: missing link target fails', () => {
