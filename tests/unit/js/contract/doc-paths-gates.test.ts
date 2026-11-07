@@ -72,24 +72,18 @@ describe('check-doc-paths', () => {
     expect(report!.legacy.failures).toEqual([])
     expect(report!.docs.extendedCount).toBe(22)
     expect(report!.findings.orphanDocs).toHaveLength(0)
-    expect(report!.findings.missingRefs).toHaveLength(7)
+    // 2026-11-07：原先 baselined 的 7 处失效引用已全部修好 ⇒ 文档图里现在
+    // **0 orphan / 0 missing refs**（baseline 保留为回归地板：再出现新失效引用就红）。
+    expect(report!.findings.missingRefs).toHaveLength(0)
     expect(report!.baseline.present).toBe(true)
     expect(report!.baseline.review).not.toBeNull()
     expect(report!.baseline.review!.owner).toBeTruthy()
     expect(report!.baseline.review!.reason).toBeTruthy()
     expect(report!.baseline.review!.reviewBy).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(report!.baseline.acceptedOrphans).toBe(0)
-    expect(report!.baseline.acceptedMissingRefs).toBe(7)
+    expect(report!.baseline.acceptedMissingRefs).toBe(0)
     expect(report!.baseline.matches).toBe(true)
-    expect(report!.findings.missingRefs.map((entry) => entry.doc + ' -> ' + entry.target)).toEqual([
-      'docs/宿主集成-接口契约-v2.3增补.md -> tests/selection_store_selftest.mjs',
-      'docs/宿主集成-接口契约-v2.3增补.md -> tests/host_routes_selftest.mjs',
-      'docs/宿主集成-接口契约-v2.3增补.md -> tests/client_bundle_selftest.mjs',
-      'docs/宿主集成-接口契约-v2.3增补.md -> tests/tui_host_selftest.mjs',
-      'docs/宿主集成-接口契约-v2.3增补.md -> runtime/selectionstore.mjs',
-      'MIGRATIONS.md -> docs/宿主集成-接口契约.md',
-      'MIGRATIONS.md -> scripts/addons/dsh_blender_bridge/',
-    ])
+    expect(report!.findings.missingRefs.map((entry) => entry.doc + ' -> ' + entry.target)).toEqual([])
   })
 
   it('keeps the legacy hard checks: missing link target fails', () => {
