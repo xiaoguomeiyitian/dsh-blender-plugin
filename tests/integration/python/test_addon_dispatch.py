@@ -54,7 +54,7 @@ def test_real_get_addon_info_contract():
     assert info["name"] == "DSH Blender Bridge"
     assert info["addon_version"] == [1, 11]
     assert info["protocol_version"] == 11
-    assert info["blender_version"] == "4.2.10"
+    assert info["blender_version"] == "5.2.2"
     # the handshake derives capabilities from the registry, so it is the full
     # registered command set (38) instead of the old hardcoded 16-name subset.
     assert info["capabilities"] == sorted(command_registry.COMMAND_NAMES)

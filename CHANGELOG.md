@@ -8,6 +8,23 @@
 > 能力面不变：模型工具仍 **15 个**，plan catalog 仍 **34 family / 228 op**，
 > addon 仍是 **38 命令 / protocol 11**。
 
+### 破坏性变更：放弃 Blender 4.x 支持（唯一受支持线 = 5.x）
+
+- **addon 下限 4.2.0 → 5.0.0**（`addon/dsh_blender_bridge/__init__.py` 的
+  `bl_info["blender"]`）⇒ **Blender 4.x 会直接拒绝启用这个 addon**（这是放弃支持的
+  真正执行点，不是文档措辞）。
+- **E2E 版本契约同步**（`tests/e2e/blender_version.py`）：受支持的主版本从 `(4, 5)`
+  收敛为 `(5,)`；下限仍由 addon 自己的 `bl_info` 单点声明 ⇒ 4.x 的二进制跑 E2E 会
+  **在版本校验处失败**（不是被跳过）。
+- **行为矩阵**：`ENV-BLENDER-42` 这条需求（4.2 LTS 实机无头往返）随支持一起作废 ⇒
+  行删除、已知 ID 表同步、计数 346/343/2 → **345/343/2**、契约测试期望串同步。
+- **4.2 专用 E2E 脚本删除**：`tests/e2e/blender_42_headless.mjs`（连同 facades 里的
+  消费者登记与 MIGRATION.md 提及）。
+- **假 bpy 桩的默认版本 4.2.10 → 5.2.2**（跟随唯一受支持的版本线），相关断言同步。
+- 文档口径中英同步：README / CONTRIBUTING / architecture / tests README /
+  第三方安装清单 / 配置参考 / setup-dev 注释 ⇒ 统一为「5.x 是唯一受支持的版本线」。
+- ⚠️ 升级影响：仍在 4.2 LTS 上跑的用户会看到 addon **无法启用** ⇒ 需要先升到 5.x。
+
 ### 变更：测试目标收敛到 Blender 5.x（不再测 4.x）
 
 - **CI 矩阵只跑 5.2.2**（`.github/workflows/pr.yml`）：自 2026-11-07 起，4.2 LTS

@@ -1,8 +1,9 @@
 """Blender version contract for the E2E layer (shared by headless + GUI).
 
-The repo supports Blender **4.2 LTS** and **5.x** (see README), while CI
-tests **5.x only** (the 4.2 LTS leg was dropped on 2026-11-07).  The E2E
-layer therefore must not hard-code one version: it has to prove two things.
+The repo supports Blender **5.x** only (see README): the add-on's own
+``bl_info["blender"]`` floor is **5.0.0** and the 4.x line was dropped
+(support abandoned, not merely untested) on 2026-11-07.  The E2E layer therefore must not hard-code one *patch* version,
+but it has to prove two things.
 
 1. **Honesty** — the report states *the very Blender that actually ran*.
    The ground truth is the executable under test: ``<exe> --version``.
@@ -12,11 +13,11 @@ layer therefore must not hard-code one version: it has to prove two things.
    support: at least the addon's own declared floor (``bl_info["blender"]``)
    and a major version we claim to support.
 
-This is *not* a relaxed assertion: the old check hard-coded ``4.2.`` which
-could only ever prove "the suite still runs on 4.2"; the new check pins the
-reported version to the exact binary under test **and** to the declared
-support range, so it fails on a wrong binary, on an unsupported Blender, and
-on a report that misreports its version.
+This is *not* a relaxed assertion: the oldest check hard-coded ``4.2.``,
+which could only ever prove "the suite still runs on 4.2"; the check now pins
+the reported version to the exact binary under test **and** to the declared
+support range (5.x), so it fails on a wrong binary, on an unsupported Blender
+(4.x included), and on a report that misreports its version.
 """
 
 from __future__ import annotations
@@ -29,8 +30,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: Major versions the repo officially supports (4.x LTS line + 5.x).
-SUPPORTED_MAJORS = (4, 5)
+#: Major versions the repo officially supports (5.x line only; 4.x was dropped
+#: on 2026-11-07 — the add-on floor below is the single source of truth).
+SUPPORTED_MAJORS = (5,)
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 
@@ -56,7 +58,7 @@ def addon_declared_floor() -> tuple[int, int, int]:
 
 
 def parse_version(text: str) -> tuple[int, int, int]:
-    """Parse ``"5.2.2 LTS"`` / ``"4.2"`` / ``"Blender 4.2.9 LTS"`` → version tuple."""
+    """Parse ``"5.2.2 LTS"`` / ``"5.1"`` / ``"Blender 5.2.2 LTS"`` → version tuple."""
     match = _VERSION_RE.search(text or "")
     if not match:
         raise AssertionError("cannot parse Blender version from: " + repr(text))

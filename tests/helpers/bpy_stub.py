@@ -117,10 +117,11 @@ class _Handlers:
 
 class _App:
     def __init__(self, version=None):
-        # The stub can impersonate any Blender version: the repo supports
-        # 4.2 LTS **and** 5.x, so the add-on's version-dependent behaviour
-        # has to be checkable on both (see tests/unit/python/test_addon_blender5x.py).
-        self.version = tuple(version) if version else (4, 2, 10)
+        # The stub can impersonate any Blender version; its default follows
+        # the supported line (**5.x** — the 4.x support was dropped on
+        # 2026-11-07), so version-dependent behaviour is checkable on the
+        # version users actually run (see tests/unit/python/test_addon_blender5x.py).
+        self.version = tuple(version) if version else (5, 2, 2)
         self.version_string = ".".join(str(part) for part in self.version)
         self.background = True
         self.tempdir = None
@@ -176,7 +177,7 @@ def install(version=None):
     """Install fake bpy/mathutils modules into sys.modules and return bpy.
 
     ``version`` impersonates a specific Blender version (e.g. ``(5, 2, 2)``);
-    the default stays at 4.2.10 so existing tests keep their expectations.
+    the default stays at 5.2.2 (the supported line) so existing tests keep their expectations.
     When the stub is already installed, ``version`` switches its reported
     version (the stub is a singleton — see :func:`set_version`).
     """

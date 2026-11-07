@@ -36,7 +36,7 @@ DSH × Blender 把 DeepSeek Harness 接到 Blender，让 AI 能在真实 Blender
 
 - 已安装并可用的 DSH（DeepSeek Harness）。
 - 从 npm 安装时不需要单独安装 Node.js；只有从源码构建才需要 Node.js **24.9** 或更高版本。Node.js **24.9** 是最低支持版本，CI 使用 Node 24。
-- Blender **5.x 是当前测试目标**：CI 只在 **5.2.2** 上跑 E2E（自 2026-11-07 起，4.2 LTS 不再进 CI 与发布闸门）；Blender 4.2 LTS 仍在支持范围内，但不再有自动化测试覆盖。E2E 会断言「报告里的版本就是实际运行的那个 Blender」且落在支持范围内。GUI 模式必须先安装随包 addon；无头模式只需要能找到 Blender 可执行文件。
+- Blender **5.x 是唯一受支持的版本线**：addon 自报 `bl_info["blender"] = (5, 0, 0)` ⇒ Blender 4.x 会拒绝启用它；CI 只在 **5.2.2** 上跑 E2E（4.x 支持已于 2026-11-07 放弃）。E2E 会断言「报告里的版本就是实际运行的那个 Blender」且落在支持范围内。GUI 模式必须先安装随包 addon；无头模式只需要能找到 Blender 可执行文件。
 - addon 兼容性：随包 addon 是唯一需要、也是唯一支持的 agent 桥。其他 addon 与之不冲突；旧的 `MCP for Blender` / `blender_mcp` 冲突（同占 127.0.0.1:9876），停用即可，不必卸载。
 - 可选：如果你想重新构建插件，需要 DSH 源码 checkout。
 

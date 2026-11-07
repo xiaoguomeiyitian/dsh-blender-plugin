@@ -9,7 +9,7 @@ bl_info = {
     "name": "DSH Blender Bridge",
     "author": "Siddharth Ahuja",
     "version": (1, 11),
-    "blender": (4, 2, 0),
+    "blender": (5, 0, 0),
     "location": "View3D > Sidebar > DSH Blender Bridge",
     "description": "Connect Blender to DSH via a local TCP bridge",
     "doc_url": "https://github.com/sixtysevenlf/dsh-blender-plugin",

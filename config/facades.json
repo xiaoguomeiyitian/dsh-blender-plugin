@@ -172,7 +172,6 @@
             "runtime/server.ts",
             "scripts/install-smoke.mjs",
             "tools/gui-channel-probe.mjs",
-            "tests/e2e/blender_42_headless.mjs",
             "tests/unit/js/engine-surface.test.ts"
           ]
         }

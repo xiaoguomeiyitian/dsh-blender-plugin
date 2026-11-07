@@ -119,7 +119,7 @@ const FIXED = {
     'INSTALL-DOCTOR',
   ],
   security: ['SEC-FILE-GUARD', 'SEC-ZIP-SLIP', 'SEC-SYMLINK', 'SEC-INJECTION', 'SEC-LEASE-BYPASS'],
-  environment: ['ENV-BLENDER-42', 'ENV-BLENDER-5X', 'ENV-DSH-CURRENT', 'ENV-DSH-PREVIOUS'],
+  environment: ['ENV-BLENDER-5X', 'ENV-DSH-CURRENT', 'ENV-DSH-PREVIOUS'],
 }
 
 const failures = []

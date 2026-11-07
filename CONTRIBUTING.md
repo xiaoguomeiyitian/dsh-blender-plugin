@@ -32,7 +32,7 @@ so the shape can be agreed before you spend time on the implementation.
 Requirements:
 
 - Node.js **24.9** or newer for development and tests; CI runs on Node 24.
-- Blender **5.x** (the tested target; CI runs the E2E matrix on 5.2.2 only). Blender 4.2 LTS stays supported but is no longer in the CI matrix. GUI mode needs the bundled addon; headless mode only needs the executable.
+- Blender **5.x** (the only supported line; the add-on floor is 5.0.0 and CI runs the E2E matrix on 5.2.2 only). Blender 4.x is not supported any more. GUI mode needs the bundled addon; headless mode only needs the executable.
 - Python **3.11+**; `npm run setup:dev` creates `.venv` and installs the Python test stack.
   Tests auto-detect `.venv`; point `PYTHON` at another interpreter only when needed
   (`PYTHONIOENCODING=utf-8` and `PYTHONUTF8=1` on Windows).

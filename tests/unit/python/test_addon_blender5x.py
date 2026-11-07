@@ -1,8 +1,9 @@
 """Add-on behaviour when Blender reports a **5.x** version.
 
-The repo officially supports Blender 4.2 LTS *and* 5.x, so the add-on's
-version-dependent surfaces have to behave on both.  These checks run the real
-add-on package against the fake-bpy stub impersonating Blender 5.2.2.
+The repo officially supports Blender 5.x only (the 4.x support was dropped
+on 2026-11-07), so the add-on's version-dependent surfaces have to behave on
+that line.  These checks run the real add-on package against the fake-bpy
+stub impersonating Blender 5.2.2.
 
 Note: the stub proves the add-on's *logic* on a 5.x-reported Blender; the
 real-5.x proof is the E2E layer (tests/e2e), which runs a real Blender 5.x.
@@ -20,7 +21,7 @@ BLENDER_5X = (5, 2, 2)
 
 # The stub is a process-wide singleton: install it, then switch the version it
 # impersonates for the duration of a test and switch it back afterwards (other
-# tests expect the default 4.2.10).
+# tests expect the default 5.2.2).
 bpy = bpy_stub.install()
 
 compat = importlib.import_module("addon.dsh_blender_bridge.compat")
@@ -49,6 +50,8 @@ def test_compat_module_still_exposes_the_addon_identity(blender_5x):
     ⚠️ 上游 v3.0.6 的死代码清理删掉了本 fork 曾加的 bpy_version /
        is_bpy_at_least 辅助函数（**全仓无人调用**）⇒ 这里不复活死代码，
        只守住仍被使用的 ADDON_MODULE。
+       （5.x 已是唯一受支持版本 ⇒ 版本判断由 tests/e2e/blender_version.py
+       的范围校验负责，addon 侧不需要自己的版本辅助函数。）
     """
     assert compat.ADDON_MODULE == "addon.dsh_blender_bridge"
 

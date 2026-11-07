@@ -15,7 +15,8 @@
  * Python discovery: PYTHON env -> python -> python3 -> (Windows) py -3, then
  * versioned fallbacks (py -3.13, python3.13, ... the Windows Store aliases) and
  * finally the base interpreter recorded in an existing .venv/pyvenv.cfg.
- * Python 3.11+ is required (pyproject target version, Blender 4.2 runtime).
+ * Python 3.11+ is required (pyproject target version; the supported Blender
+ * line is 5.x, whose bundled interpreter is 3.13).
  *
  * Idempotent: an existing .venv is reused; pip is skipped when the requirements
  * hash marker matches and the test tools import cleanly. node_modules is only

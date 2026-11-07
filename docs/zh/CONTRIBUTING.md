@@ -29,7 +29,7 @@ AGENTS.md 说明各层怎么拼在一起、什么算“装好了”，以及命�
 前置条件：
 
 - 开发与测试使用 Node.js **24.9** 或更高版本；CI 使用 Node 24。
-- Blender **5.x**（当前测试目标；CI 的 E2E 矩阵只跑 5.2.2）（Blender 4.2 LTS 仍在支持范围内，但不再进 CI 矩阵）（GUI 模式需要随包 addon；无头模式只需要可执行文件）。
+- Blender **5.x**（唯一受支持的版本线：addon 下限 5.0.0，CI 的 E2E 矩阵只跑 5.2.2）（Blender 4.x 已不再支持）（GUI 模式需要随包 addon；无头模式只需要可执行文件）。
 - Python **3.11+**；`npm run setup:dev` 会创建 `.venv` 并装好 Python 测试依赖。测试会自动
   探测 `.venv`；只有需要换解释器时才把 `PYTHON` 指向别处（Windows 另设
   `PYTHONIOENCODING=utf-8`、`PYTHONUTF8=1`）。
